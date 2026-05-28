@@ -27,10 +27,10 @@ nano .env
 mkdir -p runtime logs
 docker compose up -d --build
 docker compose ps
-curl http://localhost:${APP_PORT:-8080}/health
+curl http://localhost:${APP_PORT:-3000}/health
 ```
 
-L'application est servie par défaut sur `http://localhost:8080`.
+L'application est servie par défaut sur `http://localhost:3000`.
 
 ## Installation Host API systemd
 
