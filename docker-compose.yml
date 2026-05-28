@@ -1,0 +1,28 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_APP_VERSION: ${APP_VERSION:-0.1.0}
+    container_name: pwa-test-lab-frontend
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ./backend
+    container_name: pwa-test-lab-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3000
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      DEV_ADMIN_TOKEN: ${DEV_ADMIN_TOKEN:-change-me-admin-token}
+      DEV_ALLOWED_TOKEN: ${DEV_ALLOWED_TOKEN:-change-me-host-token}
+      DEV_HOST_API_URL: ${DEV_HOST_API_URL:-http://host.docker.internal:4878}
+      DEV_REQUEST_TIMEOUT_MS: ${DEV_REQUEST_TIMEOUT_MS:-120000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

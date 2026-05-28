@@ -1,0 +1,19 @@
+[Unit]
+Description=PWA Test Lab DEV Host API
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/PWA-Test-Lab
+Environment=NODE_ENV=production
+Environment=HOST_API_PORT=4878
+Environment=PWA_TEST_LAB_WORKDIR=/opt/PWA-Test-Lab
+EnvironmentFile=-/opt/PWA-Test-Lab/.env
+ExecStart=/usr/bin/node /opt/PWA-Test-Lab/host-tools/dev-host-api.js
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
