@@ -228,15 +228,18 @@ const publicBackendStatus = () => ({
   timestamp: new Date().toISOString()
 });
 
-const requireDevAdmin = (req, res, next) => {
-  const token = req.get('x-dev-admin-token');
-  if (!adminToken || adminToken === 'change-me-admin-token') {
-    return res.status(503).json({ error: 'DEV_ADMIN_TOKEN doit être configuré avant usage.' });
-  }
-  if (!token || token !== adminToken) {
-    return res.status(401).json({ error: 'Token DEV invalide.' });
-  }
-  return next();
+const requireDevAdmin = async (req, res, next) => {
+  await requireAppAdmin(req, res, (error) => {
+    if (error) return next(error);
+    const token = req.get('x-dev-admin-token');
+    if (!adminToken || adminToken === 'change-me-admin-token') {
+      return res.status(503).json({ error: 'DEV_ADMIN_TOKEN doit être configuré avant usage.' });
+    }
+    if (!token || token !== adminToken) {
+      return res.status(401).json({ error: 'Token DEV invalide.' });
+    }
+    return next();
+  });
 };
 
 const callHost = async (apiPath, { method = 'GET', body } = {}) => {

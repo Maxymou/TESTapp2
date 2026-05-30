@@ -6,6 +6,7 @@ const jsonHeaders = (token) => ({
 const request = async (path, { method = 'GET', token, body } = {}) => {
   const response = await fetch(path, {
     method,
+    credentials: 'same-origin',
     headers: jsonHeaders(token),
     body: body ? JSON.stringify(body) : undefined
   });

@@ -164,8 +164,7 @@ function SettingsPage({ user, adminMode, onBack, onDev, onLogout, onToggleAdminM
         <p>Base vierge destinée aux essais PWA, viewport mobile et processus de mise à jour.</p>
         <section className="settings-section"><h3>Compte utilisateur</h3><Field label="utilisateur" value={user?.displayName || user?.username} /><Field label="identifiant" value={user?.username} /><Field label="rôle" value={user?.role} /><button className="danger-button" onClick={onLogout}>Déconnexion</button></section>
         {user?.role === 'admin' && <section className="settings-section"><h3>Mode admin</h3><p>Activez ce mode local pour afficher les outils d'administration intégrés.</p><button className="primary-button" onClick={onToggleAdminMode}>{adminMode ? 'Désactiver le mode admin' : 'Activer le mode admin'}</button></section>}
-        {user?.role === 'admin' && adminMode && <section className="settings-section admin-section"><h3>Administration</h3><button className="primary-button" onClick={onUsers}>Gestion des utilisateurs</button></section>}
-        <button className="primary-button" onClick={onDev}>DEV</button>
+        {user?.role === 'admin' && adminMode && <section className="settings-section admin-section"><h3>Administration</h3><button className="primary-button" onClick={onUsers}>Gestion des utilisateurs</button><button className="primary-button" onClick={onDev}>DEV</button></section>}
       </section>
     </main>
   );
@@ -332,7 +331,8 @@ export default function App() {
       </aside>
       {page === 'home' && <main className="page home-page"><p>Interface vierge de test PWA</p></main>}
       {page === 'settings' && <SettingsPage user={user} adminMode={adminMode} onBack={() => navigate('home')} onDev={() => navigate('dev')} onLogout={handleLogout} onToggleAdminMode={() => setAdminMode((value) => !value)} onUsers={() => navigate('users')} />}
-      {page === 'dev' && <DevPage onBack={() => navigate('settings')} />}
+      {page === 'dev' && user.role === 'admin' && adminMode && <DevPage onBack={() => navigate('settings')} />}
+      {page === 'dev' && (user.role !== 'admin' || !adminMode) && <main className="page narrow-page"><section className="panel"><p>Mode admin requis.</p><button onClick={() => navigate('settings')}>Retour paramètres</button></section></main>}
       {page === 'users' && user.role === 'admin' && adminMode && <UserManagementPage currentUser={user} refreshCurrentUser={refreshCurrentUser} onBack={() => navigate('settings')} />}
       {page === 'users' && (user.role !== 'admin' || !adminMode) && <main className="page narrow-page"><section className="panel"><p>Mode admin requis.</p><button onClick={() => navigate('settings')}>Retour paramètres</button></section></main>}
     </div>
