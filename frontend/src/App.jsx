@@ -1,10 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { authApi, adminApi } from './services/authApi.js';
 import { devApi } from './services/devApi.js';
 import { getViewportInfo, isStandalone } from './viewport.js';
 
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
 const BUILD_TIMESTAMP = typeof __BUILD_TIMESTAMP__ !== 'undefined' ? __BUILD_TIMESTAMP__ : new Date().toISOString();
+const UPDATE_MIN_OVERLAY_MS = 3500;
+const UPDATE_POLL_INTERVAL_MS = 2500;
+const UPDATE_HEALTH_TIMEOUT_MS = 4500;
+const UPDATE_TIMEOUT_MS = 4 * 60 * 1000;
+const UPDATE_REQUIRED_SUCCESSES = 2;
 
 const Field = ({ label, value }) => (
   <div className="field">
@@ -14,6 +19,78 @@ const Field = ({ label, value }) => (
 );
 
 const formatDate = (value) => (value ? new Intl.DateTimeFormat('fr-FR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '—');
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const normalizeActionResult = (data) => data?.result || data;
+
+const formatActionResult = (normalized) => ({
+  stdout: typeof normalized?.stdout === 'string' ? normalized.stdout : JSON.stringify(normalized ?? {}, null, 2),
+  stderr: normalized?.stderr || '',
+  exitCode: normalized?.exitCode ?? 0
+});
+
+const isTemporaryUpdateError = (error) => {
+  const message = String(error?.message || error || '').toLowerCase();
+  return [502, 503, 504].includes(error?.status)
+    || error?.name === 'AbortError'
+    || error?.isNetworkError
+    || message.includes('failed to fetch')
+    || message.includes('networkerror')
+    || message.includes('network error')
+    || message.includes('timeout')
+    || message.includes('aborted');
+};
+
+const isFreshUpdateSuccess = (status, startedAt) => {
+  const updateStatus = status?.host?.updateStatus;
+  if (!updateStatus || updateStatus.state !== 'success' || updateStatus.exitCode !== 0) return false;
+  const updatedAt = updateStatus.updatedAt ? Date.parse(updateStatus.updatedAt) : Number.NaN;
+  return Number.isNaN(updatedAt) || updatedAt >= startedAt - 15000;
+};
+
+const withTimeout = async (operation, timeoutMs) => {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await operation(controller.signal);
+  } finally {
+    window.clearTimeout(timer);
+  }
+};
+
+function DotSpinner() {
+  return (
+    <div className="dot-spinner" aria-hidden="true">
+      <div className="dot-spinner__dot"></div>
+      <div className="dot-spinner__dot"></div>
+      <div className="dot-spinner__dot"></div>
+      <div className="dot-spinner__dot"></div>
+      <div className="dot-spinner__dot"></div>
+      <div className="dot-spinner__dot"></div>
+      <div className="dot-spinner__dot"></div>
+      <div className="dot-spinner__dot"></div>
+    </div>
+  );
+}
+
+function UpdateOverlay({ state, onRetry, onReload }) {
+  if (!state) return null;
+  const isUpdating = state === 'updating';
+  const isDone = state === 'done';
+
+  return (
+    <div className="update-overlay" role="alertdialog" aria-modal="true" aria-live="assertive" aria-labelledby="update-overlay-title">
+      <section className="update-overlay-card">
+        <h2 id="update-overlay-title">{isUpdating ? 'Mise à jour en cours' : isDone ? 'Mise à jour terminée' : 'La mise à jour prend plus de temps que prévu.'}</h2>
+        {isUpdating && <DotSpinner />}
+        <p>{isUpdating ? 'Merci de patienter pendant le redémarrage des services.' : isDone ? 'Les services répondent à nouveau. Rechargez pour utiliser la dernière version.' : 'Vous pouvez relancer la vérification ou recharger la page manuellement.'}</p>
+        {isDone && <button className="primary-button" onClick={onReload}>Recharger la page</button>}
+        {state === 'timeout' && <div className="update-overlay-actions"><button onClick={onRetry}>Réessayer la vérification</button><button className="primary-button" onClick={onReload}>Recharger la page</button></div>}
+      </section>
+    </div>
+  );
+}
 
 const ActionResult = ({ result, loading }) => (
   <section className="panel result-panel">
@@ -71,8 +148,11 @@ function DevPage({ onBack }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [updateOverlayState, setUpdateOverlayState] = useState(null);
   const [online, setOnline] = useState(navigator.onLine);
   const [viewport, setViewport] = useState(getViewportInfo());
+  const updateStartedAtRef = useRef(null);
+  const updateResultRef = useRef(null);
 
   useEffect(() => {
     const refreshFrontend = () => {
@@ -119,6 +199,113 @@ function DevPage({ onBack }) {
     }
   }, [token]);
 
+  const pollUntilUpdateReady = useCallback(async (startedAt, deadlineBase = startedAt) => {
+    const deadline = deadlineBase + UPDATE_TIMEOUT_MS;
+    let successCount = 0;
+
+    while (Date.now() < deadline) {
+      try {
+        const health = await withTimeout((signal) => devApi.health(token, { signal }), UPDATE_HEALTH_TIMEOUT_MS);
+        setStatus(health);
+        successCount = isFreshUpdateSuccess(health, startedAt) ? successCount + 1 : 0;
+        const minDelayElapsed = Date.now() - startedAt >= UPDATE_MIN_OVERLAY_MS;
+        if (minDelayElapsed && (successCount >= UPDATE_REQUIRED_SUCCESSES || updateResultRef.current?.exitCode === 0)) {
+          return true;
+        }
+      } catch (err) {
+        successCount = 0;
+      }
+      await sleep(UPDATE_POLL_INTERVAL_MS);
+    }
+
+    return false;
+  }, [token]);
+
+  const startUpdate = useCallback(async (mode, confirmText) => {
+    if (!token) {
+      setError('Token DEV requis.');
+      return;
+    }
+    if (confirmText && !window.confirm(confirmText)) return;
+
+    const started = performance.now();
+    const startedAt = Date.now();
+    updateStartedAtRef.current = startedAt;
+    updateResultRef.current = null;
+    setLoading(true);
+    setError('');
+    setUpdateOverlayState('updating');
+    setResult({ date: new Date().toISOString(), stdout: `Action: ${mode === 'force-pwa' ? 'force-pwa' : 'update'}`, stderr: '', exitCode: null });
+
+    let explicitFailure = null;
+    let notifyFailure = () => {};
+    const failurePromise = new Promise((resolve) => {
+      notifyFailure = () => resolve(false);
+    });
+    const updateRequest = devApi.update(token, mode)
+      .then((data) => {
+        const normalized = normalizeActionResult(data);
+        updateResultRef.current = normalized;
+        if ((normalized?.exitCode ?? 0) !== 0) {
+          explicitFailure = normalized;
+          notifyFailure();
+        }
+        return normalized;
+      })
+      .catch((err) => {
+        if (!isTemporaryUpdateError(err)) {
+          explicitFailure = { stdout: '', stderr: err.message || String(err), exitCode: 1 };
+          notifyFailure();
+        }
+        return null;
+      });
+
+    try {
+      const ready = await Promise.race([pollUntilUpdateReady(startedAt), failurePromise]);
+      const updateResponse = await Promise.race([updateRequest, sleep(0).then(() => null)]);
+      if (explicitFailure) {
+        const formattedFailure = formatActionResult(explicitFailure);
+        setUpdateOverlayState(null);
+        setError(formattedFailure.stderr || 'La mise à jour a échoué.');
+        setResult({ date: new Date().toISOString(), durationMs: Math.round(performance.now() - started), ...formattedFailure });
+        return;
+      }
+      if (ready) {
+        const normalized = updateResponse || updateResultRef.current || { stdout: 'Services disponibles après mise à jour.', stderr: '', exitCode: 0 };
+        setResult({ date: new Date().toISOString(), durationMs: Math.round(performance.now() - started), ...formatActionResult(normalized) });
+        setUpdateOverlayState('done');
+        return;
+      }
+      setUpdateOverlayState('timeout');
+      setError('La mise à jour prend plus de temps que prévu.');
+      setResult({ date: new Date().toISOString(), durationMs: Math.round(performance.now() - started), stdout: '', stderr: 'Timeout de vérification après mise à jour.', exitCode: 1 });
+    } finally {
+      setLoading(false);
+    }
+  }, [pollUntilUpdateReady, token]);
+
+  const retryUpdateCheck = useCallback(async () => {
+    if (!token) {
+      setError('Token DEV requis.');
+      return;
+    }
+    const startedAt = updateStartedAtRef.current || Date.now();
+    setError('');
+    setLoading(true);
+    setUpdateOverlayState('updating');
+    try {
+      const ready = await pollUntilUpdateReady(startedAt, Date.now());
+      if (ready) {
+        setUpdateOverlayState('done');
+      } else {
+        setUpdateOverlayState('timeout');
+        setError('La mise à jour prend plus de temps que prévu.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [pollUntilUpdateReady, token]);
+
   const refresh = useCallback(() => run('refresh', () => devApi.health(token)), [run, token]);
 
   useEffect(() => {
@@ -138,21 +325,24 @@ function DevPage({ onBack }) {
   }), [online, viewport]);
 
   return (
-    <main className="page dev-page">
-      <header className="sub-header"><button className="ghost-button" onClick={onBack}>← Retour</button><h2>DEV</h2></header>
-      <section className="panel token-panel">
-        <label>Token DEV<input type="password" value={token} placeholder="Saisir DEV_ADMIN_TOKEN" onChange={(event) => saveToken(event.target.value)} autoComplete="off" /></label>
-        <p>Le token est stocké localement dans ce navigateur et n'est jamais affiché en clair.</p>
-      </section>
-      {error && <div className="error-box">{error}</div>}
-      <div className="dev-grid">
-        <section className="panel"><h3>Frontend</h3><Field label="version app" value={frontendInfo.version} /><Field label="build timestamp" value={frontendInfo.build} /><Field label="mode PWA" value={frontendInfo.pwaMode} /><Field label="standalone" value={frontendInfo.standalone} /><Field label="viewport" value={frontendInfo.viewport} /><Field label="app-height" value={frontendInfo.appHeight} /><Field label="visual viewport" value={frontendInfo.visual} /><Field label="online/offline" value={frontendInfo.online} /><Field label="user-agent" value={frontendInfo.userAgent} /></section>
-        <section className="panel"><h3>Backend</h3><Field label="statut API" value={status?.backend?.status} /><Field label="uptime" value={status?.backend?.uptimeSeconds ? `${status.backend.uptimeSeconds}s` : '—'} /><Field label="version Node" value={status?.backend?.nodeVersion} /><Field label="environnement" value={status?.backend?.environment} /><Field label="timestamp serveur" value={status?.backend?.timestamp} /></section>
-        <section className="panel"><h3>Host API</h3><Field label="statut" value={status?.host?.status} /><Field label="URL" value={status?.host?.url} /><Field label="workdir" value={status?.host?.workdir} /><Field label="dernière erreur" value={status?.host?.lastError} /><Field label="update status" value={status?.host?.updateStatus ? JSON.stringify(status.host.updateStatus) : '—'} /></section>
-        <section className="panel actions-panel"><h3>Actions</h3><button disabled={loading} onClick={refresh}>Rafraîchir les statuts</button><button disabled={loading} onClick={() => run('update', () => devApi.update(token, 'normal'), 'Lancer la mise à jour normale ?')}>Mettre à jour l’app</button><button disabled={loading} onClick={() => run('force-pwa', () => devApi.update(token, 'force-pwa'), 'Mettre à jour et forcer le rafraîchissement PWA ?')}>Mettre à jour + forcer PWA</button><button disabled={loading} onClick={() => run('restart', () => devApi.restart(token), 'Redémarrer les conteneurs ?')}>Redémarrer l’app</button><button disabled={loading} onClick={() => run('docker', () => devApi.docker(token))}>Voir état Docker</button><button disabled={loading} onClick={() => run('logs', () => devApi.logs(token))}>Voir logs récents</button></section>
-      </div>
-      <ActionResult result={result} loading={loading} />
-    </main>
+    <>
+      <main className={`page dev-page${updateOverlayState ? ' page-blurred' : ''}`} aria-hidden={updateOverlayState ? 'true' : undefined}>
+        <header className="sub-header"><button className="ghost-button" onClick={onBack}>← Retour</button><h2>DEV</h2></header>
+        <section className="panel token-panel">
+          <label>Token DEV<input type="password" value={token} placeholder="Saisir DEV_ADMIN_TOKEN" onChange={(event) => saveToken(event.target.value)} autoComplete="off" /></label>
+          <p>Le token est stocké localement dans ce navigateur et n'est jamais affiché en clair.</p>
+        </section>
+        {error && updateOverlayState !== 'updating' && <div className="error-box">{error}</div>}
+        <div className="dev-grid">
+          <section className="panel"><h3>Frontend</h3><Field label="version app" value={frontendInfo.version} /><Field label="build timestamp" value={frontendInfo.build} /><Field label="mode PWA" value={frontendInfo.pwaMode} /><Field label="standalone" value={frontendInfo.standalone} /><Field label="viewport" value={frontendInfo.viewport} /><Field label="app-height" value={frontendInfo.appHeight} /><Field label="visual viewport" value={frontendInfo.visual} /><Field label="online/offline" value={frontendInfo.online} /><Field label="user-agent" value={frontendInfo.userAgent} /></section>
+          <section className="panel"><h3>Backend</h3><Field label="statut API" value={status?.backend?.status} /><Field label="uptime" value={status?.backend?.uptimeSeconds ? `${status.backend.uptimeSeconds}s` : '—'} /><Field label="version Node" value={status?.backend?.nodeVersion} /><Field label="environnement" value={status?.backend?.environment} /><Field label="timestamp serveur" value={status?.backend?.timestamp} /></section>
+          <section className="panel"><h3>Host API</h3><Field label="statut" value={status?.host?.status} /><Field label="URL" value={status?.host?.url} /><Field label="workdir" value={status?.host?.workdir} /><Field label="dernière erreur" value={status?.host?.lastError} /><Field label="update status" value={status?.host?.updateStatus ? JSON.stringify(status.host.updateStatus) : '—'} /></section>
+          <section className="panel actions-panel"><h3>Actions</h3><button disabled={loading} onClick={refresh}>Rafraîchir les statuts</button><button disabled={loading} onClick={() => startUpdate('normal', 'Lancer la mise à jour normale ?')}>Mettre à jour l’app</button><button disabled={loading} onClick={() => startUpdate('force-pwa', 'Mettre à jour et forcer le rafraîchissement PWA ?')}>Mettre à jour + forcer PWA</button><button disabled={loading} onClick={() => run('restart', () => devApi.restart(token), 'Redémarrer les conteneurs ?')}>Redémarrer l’app</button><button disabled={loading} onClick={() => run('docker', () => devApi.docker(token))}>Voir état Docker</button><button disabled={loading} onClick={() => run('logs', () => devApi.logs(token))}>Voir logs récents</button></section>
+        </div>
+        <ActionResult result={result} loading={loading} />
+      </main>
+      <UpdateOverlay state={updateOverlayState} onRetry={retryUpdateCheck} onReload={() => window.location.reload()} />
+    </>
   );
 }
 
