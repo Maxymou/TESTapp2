@@ -24,5 +24,17 @@ services:
       DEV_ALLOWED_TOKEN: ${DEV_ALLOWED_TOKEN:-change-me-host-token}
       DEV_HOST_API_URL: ${DEV_HOST_API_URL:-http://host.docker.internal:4878}
       DEV_REQUEST_TIMEOUT_MS: ${DEV_REQUEST_TIMEOUT_MS:-120000}
+      USER_DATA_PATH: ${USER_DATA_PATH:-/data/users.json}
+      SESSION_SECRET: ${SESSION_SECRET:-replace-with-a-very-long-random-session-secret}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-24}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+      ADMIN_DISPLAY_NAME: ${ADMIN_DISPLAY_NAME:-Administrateur}
+    volumes:
+      - user-data:/data
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+volumes:
+  user-data:
