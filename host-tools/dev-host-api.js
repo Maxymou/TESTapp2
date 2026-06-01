@@ -5,7 +5,11 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const port = Number(process.env.HOST_API_PORT || 4878);
-const workdir = path.resolve(process.env.PWA_TEST_LAB_WORKDIR || process.cwd());
+const workdir = path.resolve(
+  process.env.APP_WORKDIR ||
+  process.env.PWA_TEST_LAB_WORKDIR ||
+  process.cwd()
+);
 const token = process.env.DEV_ALLOWED_TOKEN || '';
 const timeoutMs = Number(process.env.HOST_COMMAND_TIMEOUT_MS || 180000);
 let lastError = null;
@@ -138,5 +142,5 @@ const router = async (req, res) => {
 };
 
 createServer(router).listen(port, () => {
-  console.log(`PWA Test Lab Host API listening on ${port} for ${workdir}`);
+  console.log(`TESTapp2 Host API listening on ${port} for ${workdir}`);
 });

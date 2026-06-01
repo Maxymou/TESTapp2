@@ -2,8 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { authApi, adminApi } from './services/authApi.js';
 import { devApi } from './services/devApi.js';
 import { getViewportInfo, isStandalone } from './viewport.js';
+import { appConfig } from './config/appConfig.js';
 
-const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
+const APP_VERSION =
+  typeof __APP_VERSION__ !== 'undefined'
+    ? __APP_VERSION__
+    : 'dev';
 const BUILD_TIMESTAMP = typeof __BUILD_TIMESTAMP__ !== 'undefined' ? __BUILD_TIMESTAMP__ : new Date().toISOString();
 const UPDATE_MIN_OVERLAY_MS = 3500;
 const UPDATE_POLL_INTERVAL_MS = 2500;
@@ -130,8 +134,8 @@ function LoginPage({ onLogin }) {
     <main className="login-page">
       <form className="login-card" onSubmit={submit}>
         <div className="login-brand">
-          <span className="login-logo">PWA</span>
-          <div><h1>PWA Test Lab</h1><p>Connectez-vous pour accéder à l'application.</p></div>
+          <span className="login-logo">{appConfig.shortName}</span>
+          <div><h1>{appConfig.appName}</h1><p>Connectez-vous pour accéder à l'application.</p></div>
         </div>
         <label>Identifiant<input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" required /></label>
         <label>Mot de passe<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required /></label>
@@ -313,6 +317,9 @@ function DevPage({ onBack }) {
   }, []);
 
   const frontendInfo = useMemo(() => ({
+    appName: appConfig.appName,
+    appId: appConfig.appId,
+    defaultPort: appConfig.defaultPort,
     version: APP_VERSION,
     build: BUILD_TIMESTAMP,
     pwaMode: window.matchMedia('(display-mode: standalone)').matches ? 'standalone' : 'browser',
@@ -334,7 +341,7 @@ function DevPage({ onBack }) {
         </section>
         {error && updateOverlayState !== 'updating' && <div className="error-box">{error}</div>}
         <div className="dev-grid">
-          <section className="panel"><h3>Frontend</h3><Field label="version app" value={frontendInfo.version} /><Field label="build timestamp" value={frontendInfo.build} /><Field label="mode PWA" value={frontendInfo.pwaMode} /><Field label="standalone" value={frontendInfo.standalone} /><Field label="viewport" value={frontendInfo.viewport} /><Field label="app-height" value={frontendInfo.appHeight} /><Field label="visual viewport" value={frontendInfo.visual} /><Field label="online/offline" value={frontendInfo.online} /><Field label="user-agent" value={frontendInfo.userAgent} /></section>
+          <section className="panel"><h3>Frontend</h3><Field label="application" value={frontendInfo.appName} /><Field label="appId" value={frontendInfo.appId} /><Field label="port par défaut" value={frontendInfo.defaultPort} /><Field label="version app" value={frontendInfo.version} /><Field label="build timestamp" value={frontendInfo.build} /><Field label="mode PWA" value={frontendInfo.pwaMode} /><Field label="standalone" value={frontendInfo.standalone} /><Field label="viewport" value={frontendInfo.viewport} /><Field label="app-height" value={frontendInfo.appHeight} /><Field label="visual viewport" value={frontendInfo.visual} /><Field label="online/offline" value={frontendInfo.online} /><Field label="user-agent" value={frontendInfo.userAgent} /></section>
           <section className="panel"><h3>Backend</h3><Field label="statut API" value={status?.backend?.status} /><Field label="uptime" value={status?.backend?.uptimeSeconds ? `${status.backend.uptimeSeconds}s` : '—'} /><Field label="version Node" value={status?.backend?.nodeVersion} /><Field label="environnement" value={status?.backend?.environment} /><Field label="timestamp serveur" value={status?.backend?.timestamp} /></section>
           <section className="panel"><h3>Host API</h3><Field label="statut" value={status?.host?.status} /><Field label="URL" value={status?.host?.url} /><Field label="workdir" value={status?.host?.workdir} /><Field label="dernière erreur" value={status?.host?.lastError} /><Field label="update status" value={status?.host?.updateStatus ? JSON.stringify(status.host.updateStatus) : '—'} /></section>
           <section className="panel actions-panel"><h3>Actions</h3><button disabled={loading} onClick={refresh}>Rafraîchir les statuts</button><button disabled={loading} onClick={() => startUpdate('normal', 'Lancer la mise à jour normale ?')}>Mettre à jour l’app</button><button disabled={loading} onClick={() => startUpdate('force-pwa', 'Mettre à jour et forcer le rafraîchissement PWA ?')}>Mettre à jour + forcer PWA</button><button disabled={loading} onClick={() => run('restart', () => devApi.restart(token), 'Redémarrer les conteneurs ?')}>Redémarrer l’app</button><button disabled={loading} onClick={() => run('docker', () => devApi.docker(token))}>Voir état Docker</button><button disabled={loading} onClick={() => run('logs', () => devApi.logs(token))}>Voir logs récents</button></section>
@@ -354,7 +361,7 @@ function SettingsPage({ user, adminMode, onBack, onDev, onLogout, onToggleAdminM
     <main className="page narrow-page">
       <section className="settings-card">
         <header className="sub-header"><button className="ghost-button" onClick={onBack}>← Fermer</button><h2>Paramètres</h2></header>
-        <p>Base vierge destinée aux essais PWA, viewport mobile et processus de mise à jour.</p>
+        <p>{appConfig.appDescription}</p>
         <section className="settings-section"><h3>Compte utilisateur</h3><Field label="utilisateur" value={user?.displayName || user?.username} /><Field label="identifiant" value={user?.username} /><Field label="rôle" value={user?.role} /><button className="danger-button" onClick={onLogout}>Déconnexion</button></section>
         {isAdmin && <section className="settings-section"><h3>Mode admin</h3><p>Activez ce mode local pour afficher les outils d'administration intégrés.</p><button className="primary-button" onClick={onToggleAdminMode}>{adminMode ? 'Désactiver le mode admin' : 'Activer le mode admin'}</button></section>}
         {canShowAdministration && <section className="settings-section admin-section"><h3>Administration</h3><button className="primary-button" onClick={onUsers}>Gestion des utilisateurs</button><button className="primary-button" onClick={onDev}>DEV</button></section>}
@@ -453,6 +460,11 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [adminMode, setAdminMode] = useState(false);
 
+  useEffect(() => {
+    document.documentElement.style.setProperty('--bg', appConfig.backgroundColor);
+    document.documentElement.style.setProperty('--accent', appConfig.accentColor);
+  }, []);
+
   const refreshCurrentUser = useCallback(async () => {
     const payload = await authApi.me();
     setUser(payload.user);
@@ -515,14 +527,14 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <header className="topbar"><button className="hamburger" aria-label="Ouvrir le menu" onClick={() => setDrawerOpen(true)}>☰</button><h1>PWA Test Lab</h1></header>
+      <header className="topbar"><button className="hamburger" aria-label="Ouvrir le menu" onClick={() => setDrawerOpen(true)}>☰</button><h1>{appConfig.appTitle}</h1></header>
       <div className={`overlay ${drawerOpen ? 'visible' : ''}`} onClick={() => setDrawerOpen(false)} />
       <aside className={`drawer ${drawerOpen ? 'open' : ''}`} aria-hidden={!drawerOpen}>
-        <div className="drawer-header"><strong>PWA Test Lab</strong><button className="close-button" aria-label="Fermer" onClick={() => setDrawerOpen(false)}>×</button></div>
+        <div className="drawer-header"><strong>{appConfig.appName}</strong><button className="close-button" aria-label="Fermer" onClick={() => setDrawerOpen(false)}>×</button></div>
         <button className="drawer-link" onClick={goSettings}>Paramètres</button>
         {user.role === 'admin' && adminMode && <button className="drawer-link" onClick={() => { navigate('users'); setDrawerOpen(false); }}>Gestion des utilisateurs</button>}
       </aside>
-      {page === 'home' && <main className="page home-page"><p>Interface vierge de test PWA</p></main>}
+      {page === 'home' && <main className="page home-page"><p>{appConfig.appDescription}</p></main>}
       {page === 'settings' && <SettingsPage user={user} adminMode={adminMode} onBack={() => navigate('home')} onDev={() => navigate('dev')} onLogout={handleLogout} onToggleAdminMode={() => setAdminMode((value) => !value)} onUsers={() => navigate('users')} />}
       {page === 'dev' && user.role === 'admin' && adminMode && <DevPage onBack={() => navigate('settings')} />}
       {page === 'dev' && (user.role !== 'admin' || !adminMode) && <main className="page narrow-page"><section className="panel"><p>Mode admin requis.</p><button onClick={() => navigate('settings')}>Retour paramètres</button></section></main>}

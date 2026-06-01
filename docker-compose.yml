@@ -1,10 +1,12 @@
+name: ${DOCKER_PROJECT_NAME:-testapp2}
+
 services:
   frontend:
     build:
       context: ./frontend
       args:
         VITE_APP_VERSION: ${APP_VERSION:-0.1.0}
-    container_name: pwa-test-lab-frontend
+    container_name: ${FRONTEND_CONTAINER:-testapp2-frontend}
     restart: unless-stopped
     ports:
       - "${APP_PORT:-3000}:80"
@@ -14,7 +16,7 @@ services:
   backend:
     build:
       context: ./backend
-    container_name: pwa-test-lab-backend
+    container_name: ${BACKEND_CONTAINER:-testapp2-backend}
     restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-production}
@@ -28,6 +30,7 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:-replace-with-a-very-long-random-session-secret}
       SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-24}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-testapp2_session}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
       ADMIN_DISPLAY_NAME: ${ADMIN_DISPLAY_NAME:-Administrateur}
