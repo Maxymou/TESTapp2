@@ -12,7 +12,7 @@ const hostToken = process.env.DEV_ALLOWED_TOKEN || '';
 const dataPath = process.env.USER_DATA_PATH || '/data/users.json';
 const sessionSecret = process.env.SESSION_SECRET || '';
 const sessionTtlMs = Number(process.env.SESSION_TTL_HOURS || 24) * 60 * 60 * 1000;
-const cookieName = 'pwa_test_lab_session';
+const cookieName = process.env.SESSION_COOKIE_NAME || 'testapp2_session';
 const loginFailures = new Map();
 const maxLoginFailures = 5;
 const lockoutMs = 5 * 60 * 1000;
@@ -482,7 +482,7 @@ app.use((error, _req, res, _next) => {
 initUsers()
   .then(() => {
     app.listen(port, () => {
-      console.log(`PWA Test Lab backend listening on ${port}`);
+      console.log(`TESTapp2 backend listening on ${port}`);
       console.log(`[auth] Persistance utilisateurs: ${dataPath}`);
     });
   })

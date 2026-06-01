@@ -56,6 +56,8 @@ trap on_error ERR
 
 write_status "running" 0 "Mise à jour en cours."
 echo "[$(date -Is)] Début update mode=$MODE"
+# Ne pas appeler de script d'initialisation ici.
+# La configuration propre à l'app doit rester dans .env et les volumes Docker.
 
 git fetch origin main
 git reset --hard origin/main

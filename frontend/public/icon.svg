@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="PWA Test Lab icon">
-  <rect width="512" height="512" rx="112" fill="#0f172a"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Application icon">
+  <rect width="512" height="512" rx="112" fill="#020617"/>
   <circle cx="256" cy="256" r="164" fill="#38bdf8" opacity="0.16"/>
   <path d="M144 180h224v152H144z" fill="none" stroke="#e2e8f0" stroke-width="24" stroke-linejoin="round"/>
   <path d="M184 228h144M184 280h88" stroke="#38bdf8" stroke-width="24" stroke-linecap="round"/>

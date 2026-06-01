@@ -1,12 +1,12 @@
 :root {
   color-scheme: dark;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --bg: #08111f;
+  --bg: #020617;
   --panel: rgba(15, 23, 42, 0.88);
   --panel-border: rgba(148, 163, 184, 0.22);
   --text: #e2e8f0;
   --muted: #94a3b8;
-  --accent: #38bdf8;
+  --accent: #A3E635;
   --danger: #f87171;
   --app-height: 100dvh;
   --vvh: 100dvh;
@@ -44,7 +44,7 @@ input {
 button {
   border: 0;
   border-radius: 14px;
-  background: rgba(56, 189, 248, 0.16);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
   color: var(--text);
   cursor: pointer;
   min-height: 44px;
@@ -61,8 +61,8 @@ button:disabled {
   min-height: var(--vvh);
   padding: calc(var(--safe-top) + 72px) var(--safe-right) var(--safe-bottom) var(--safe-left);
   background:
-    radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), transparent 32rem),
-    linear-gradient(160deg, #08111f 0%, #0f172a 62%, #111827 100%);
+    radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 18%, transparent), transparent 32rem),
+    linear-gradient(160deg, var(--bg) 0%, #0f172a 62%, #111827 100%);
 }
 
 .topbar {
@@ -143,7 +143,7 @@ button:disabled {
 .drawer-link {
   width: 100%;
   text-align: left;
-  background: rgba(56, 189, 248, 0.12);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .page {
@@ -192,7 +192,7 @@ button:disabled {
 .primary-button {
   width: 100%;
   margin-top: 1rem;
-  background: linear-gradient(135deg, #0284c7, #38bdf8);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 70%, #0284c7), var(--accent));
   color: #04111f;
   font-weight: 800;
 }
@@ -262,7 +262,7 @@ button:disabled {
 .dot-spinner {
   --uib-size: 2.8rem;
   --uib-speed: .9s;
-  --uib-color: #38bdf8;
+  --uib-color: var(--accent);
   position: relative;
   display: flex;
   align-items: center;
@@ -291,7 +291,7 @@ button:disabled {
   transform: scale(0);
   opacity: 0.5;
   animation: pulse0112 calc(var(--uib-speed) * 1.111) ease-in-out infinite;
-  box-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .dot-spinner__dot:nth-child(2) {
@@ -482,8 +482,8 @@ pre {
   align-items: center;
   padding: calc(var(--safe-top) + 1rem) max(1rem, var(--safe-right)) calc(var(--safe-bottom) + 1rem) max(1rem, var(--safe-left));
   background:
-    radial-gradient(circle at top right, rgba(56, 189, 248, 0.22), transparent 28rem),
-    linear-gradient(160deg, #08111f 0%, #0f172a 62%, #111827 100%);
+    radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 22%, transparent), transparent 28rem),
+    linear-gradient(160deg, var(--bg) 0%, #0f172a 62%, #111827 100%);
 }
 
 .login-card {
@@ -523,7 +523,7 @@ pre {
   flex: 0 0 58px;
   place-items: center;
   border-radius: 18px;
-  background: linear-gradient(135deg, #0284c7, #38bdf8);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 70%, #0284c7), var(--accent));
   color: #04111f;
   font-weight: 900;
 }
