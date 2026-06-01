@@ -9,7 +9,7 @@ Le dépôt est conçu pour créer de nouvelles apps sans réécrire le socle tec
 3. configurer les secrets, ports, tokens, chemins et noms de conteneurs dans `.env` sur le serveur;
 4. développer ensuite les pages, routes et services métier nécessaires.
 
-Consultez aussi [`docs/CREATE_NEW_APP.md`](docs/CREATE_NEW_APP.md) pour un guide complet avec l'exemple `PAPOTO`.
+Consultez aussi [`docs/CREATE_NEW_APP.md`](docs/CREATE_NEW_APP.md) pour un guide complet avec l'exemple `PAPOTO`, ainsi que [`docs/BACKUP_RESTORE.md`](docs/BACKUP_RESTORE.md) pour la sauvegarde et la restauration du volume utilisateurs.
 
 ## Architecture
 

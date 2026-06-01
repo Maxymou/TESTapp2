@@ -140,6 +140,11 @@ button:disabled {
   margin-bottom: 1.5rem;
 }
 
+.drawer-nav {
+  display: grid;
+  gap: 0.75rem;
+}
+
 .drawer-link {
   width: 100%;
   text-align: left;
@@ -158,6 +163,46 @@ button:disabled {
   place-items: center;
   color: var(--muted);
   text-align: center;
+}
+
+.welcome-card {
+  width: min(100%, 560px);
+  display: grid;
+  gap: 1rem;
+  padding: clamp(1.25rem, 6vw, 2rem);
+}
+
+.welcome-card h2,
+.welcome-card h3,
+.welcome-card p {
+  margin: 0;
+}
+
+.welcome-card h2 {
+  color: var(--text);
+  font-size: clamp(1.8rem, 9vw, 2.7rem);
+}
+
+.eyebrow {
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.placeholder-note {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.5rem;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 20px;
+  background: rgba(2, 6, 23, 0.24);
+  padding: 1rem;
+}
+
+.placeholder-note h3 {
+  color: var(--text);
 }
 
 .narrow-page {
@@ -511,6 +556,7 @@ pre {
 
 .login-brand p,
 .settings-section p,
+.about-section p,
 .admin-toolbar p,
 .user-card p {
   color: var(--muted);
@@ -563,6 +609,8 @@ pre {
 
 .settings-section h3,
 .settings-section p,
+.about-section h3,
+.about-section p,
 .admin-toolbar h3,
 .admin-toolbar p,
 .user-card h3,
@@ -640,6 +688,79 @@ pre {
   margin-top: 1rem;
 }
 
+
+.notification-stack {
+  position: fixed;
+  inset: auto max(1rem, var(--safe-right)) calc(var(--safe-bottom) + 1rem) max(1rem, var(--safe-left));
+  z-index: 90;
+  display: grid;
+  gap: 0.75rem;
+  pointer-events: none;
+}
+
+.notification {
+  width: min(100%, 460px);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.75rem;
+  align-items: start;
+  margin: 0 auto;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-left-width: 5px;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.98);
+  box-shadow: 0 20px 64px rgba(0, 0, 0, 0.34);
+  padding: 0.85rem;
+  pointer-events: auto;
+}
+
+.notification strong,
+.notification p {
+  margin: 0;
+}
+
+.notification p {
+  margin-top: 0.25rem;
+  color: var(--muted);
+}
+
+.notification-success {
+  border-left-color: #22c55e;
+}
+
+.notification-error {
+  border-left-color: var(--danger);
+}
+
+.notification-info {
+  border-left-color: #38bdf8;
+}
+
+.notification-warning {
+  border-left-color: #facc15;
+}
+
+.notification-close {
+  width: 38px;
+  min-height: 38px;
+  border-radius: 12px;
+  padding: 0;
+  background: rgba(148, 163, 184, 0.14);
+}
+
+.confirm-backdrop {
+  z-index: 80;
+}
+
+.confirm-card {
+  gap: 1.2rem;
+}
+
+.confirm-card p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -694,6 +815,7 @@ pre {
   .modal-actions {
     grid-template-columns: 1fr 1fr;
   }
+
 
   .modal-backdrop {
     align-items: center;
