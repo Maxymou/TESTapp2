@@ -4,16 +4,30 @@ import { devApi } from './services/devApi.js';
 import { getViewportInfo, isStandalone } from './viewport.js';
 import { appConfig } from './config/appConfig.js';
 
-const APP_VERSION =
-  typeof __APP_VERSION__ !== 'undefined'
-    ? __APP_VERSION__
-    : 'dev';
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
 const BUILD_TIMESTAMP = typeof __BUILD_TIMESTAMP__ !== 'undefined' ? __BUILD_TIMESTAMP__ : new Date().toISOString();
 const UPDATE_MIN_OVERLAY_MS = 3500;
 const UPDATE_POLL_INTERVAL_MS = 2500;
 const UPDATE_HEALTH_TIMEOUT_MS = 4500;
 const UPDATE_TIMEOUT_MS = 4 * 60 * 1000;
 const UPDATE_REQUIRED_SUCCESSES = 2;
+const NOTIFICATION_DEFAULT_DURATION_MS = 4500;
+
+const pagePaths = {
+  home: '/',
+  module1: '/module-1',
+  module2: '/module-2',
+  settings: '/settings',
+  about: '/about',
+  users: '/settings/users',
+  dev: '/settings/dev',
+  login: '/login'
+};
+
+const routeFromPath = (pathname) => {
+  const match = Object.entries(pagePaths).find(([, path]) => path === pathname);
+  return match?.[0] || (pathname === '/login' ? 'login' : 'home');
+};
 
 const Field = ({ label, value }) => (
   <div className="field">
@@ -23,11 +37,8 @@ const Field = ({ label, value }) => (
 );
 
 const formatDate = (value) => (value ? new Intl.DateTimeFormat('fr-FR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '—');
-
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
 const normalizeActionResult = (data) => data?.result || data;
-
 const formatActionResult = (normalized) => ({
   stdout: typeof normalized?.stdout === 'string' ? normalized.stdout : JSON.stringify(normalized ?? {}, null, 2),
   stderr: normalized?.stderr || '',
@@ -66,14 +77,60 @@ const withTimeout = async (operation, timeoutMs) => {
 function DotSpinner() {
   return (
     <div className="dot-spinner" aria-hidden="true">
-      <div className="dot-spinner__dot"></div>
-      <div className="dot-spinner__dot"></div>
-      <div className="dot-spinner__dot"></div>
-      <div className="dot-spinner__dot"></div>
-      <div className="dot-spinner__dot"></div>
-      <div className="dot-spinner__dot"></div>
-      <div className="dot-spinner__dot"></div>
-      <div className="dot-spinner__dot"></div>
+      {Array.from({ length: 8 }).map((_, index) => <div className="dot-spinner__dot" key={index}></div>)}
+    </div>
+  );
+}
+
+function NotificationCenter({ notifications, onClose }) {
+  return (
+    <div className="notification-stack" aria-live="polite" aria-relevant="additions removals">
+      {notifications.map((notification) => (
+        <article className={`notification notification-${notification.type}`} key={notification.id}>
+          <div>
+            <strong>{notification.title || notificationLabels[notification.type]}</strong>
+            <p>{notification.message}</p>
+          </div>
+          <button className="notification-close" type="button" aria-label="Fermer la notification" onClick={() => onClose(notification.id)}>×</button>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+const notificationLabels = {
+  success: 'Succès',
+  error: 'Erreur',
+  info: 'Information',
+  warning: 'Attention'
+};
+
+function ConfirmDialog({ confirmation, onCancel, onConfirm }) {
+  const confirmButtonRef = useRef(null);
+
+  useEffect(() => {
+    if (!confirmation) return undefined;
+    confirmButtonRef.current?.focus();
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') onCancel();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [confirmation, onCancel]);
+
+  if (!confirmation) return null;
+  const isDanger = confirmation.variant === 'danger';
+
+  return (
+    <div className="modal-backdrop confirm-backdrop" role="presentation">
+      <section className="modal-card confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+        <h3 id="confirm-title">{confirmation.title}</h3>
+        <p id="confirm-message">{confirmation.message}</p>
+        <div className="modal-actions">
+          <button type="button" className="ghost-button" onClick={onCancel}>{confirmation.cancelLabel || 'Annuler'}</button>
+          <button ref={confirmButtonRef} type="button" className={isDanger ? 'danger-button' : 'primary-button'} onClick={onConfirm}>{confirmation.confirmLabel || 'Confirmer'}</button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -146,7 +203,59 @@ function LoginPage({ onLogin }) {
   );
 }
 
-function DevPage({ onBack }) {
+function HomePage() {
+  return (
+    <main className="page home-page">
+      <section className="panel welcome-card">
+        <p className="eyebrow">Accueil</p>
+        <h2>{appConfig.appName}</h2>
+        <p>Bienvenue dans l’application.</p>
+        <div className="placeholder-note">
+          <h3>Point de départ</h3>
+          <p>Cette page est le point de départ du futur module métier. Remplacez ce contenu par les pages spécifiques de la nouvelle application.</p>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function ModulePlaceholderPage({ title }) {
+  return (
+    <main className="page home-page">
+      <section className="panel welcome-card">
+        <p className="eyebrow">À personnaliser</p>
+        <h2>{title}</h2>
+        <p>Emplacement réservé pour un futur module métier.</p>
+        <div className="placeholder-note">
+          <h3>Template</h3>
+          <p>Remplacez cette carte par l’écran, les services et les composants métier de votre application.</p>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function AboutPage({ onBack }) {
+  return (
+    <main className="page narrow-page">
+      <section className="settings-card">
+        <header className="sub-header"><button className="ghost-button" onClick={onBack}>← Retour</button><h2>À propos</h2></header>
+        <p>{appConfig.appDescription}</p>
+        <section className="settings-section about-section">
+          <h3>Application</h3>
+          <Field label="nom" value={appConfig.appName} />
+          <Field label="identifiant" value={appConfig.appId} />
+          <Field label="description" value={appConfig.appDescription} />
+          <Field label="version frontend" value={APP_VERSION} />
+          <Field label="build timestamp" value={BUILD_TIMESTAMP} />
+          <Field label="port par défaut" value={appConfig.defaultPort} />
+        </section>
+      </section>
+    </main>
+  );
+}
+
+function DevPage({ onBack, confirm }) {
   const [token, setToken] = useState(() => localStorage.getItem('devAdminToken') || '');
   const [status, setStatus] = useState(null);
   const [result, setResult] = useState(null);
@@ -180,12 +289,12 @@ function DevPage({ onBack }) {
     localStorage.setItem('devAdminToken', value);
   };
 
-  const run = useCallback(async (label, fn, confirmText) => {
+  const run = useCallback(async (label, fn, confirmOptions) => {
     if (!token) {
       setError('Token DEV requis.');
       return;
     }
-    if (confirmText && !window.confirm(confirmText)) return;
+    if (confirmOptions && !(await confirm(confirmOptions))) return;
     const started = performance.now();
     setLoading(true);
     setError('');
@@ -201,7 +310,7 @@ function DevPage({ onBack }) {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [confirm, token]);
 
   const pollUntilUpdateReady = useCallback(async (startedAt, deadlineBase = startedAt) => {
     const deadline = deadlineBase + UPDATE_TIMEOUT_MS;
@@ -213,9 +322,7 @@ function DevPage({ onBack }) {
         setStatus(health);
         successCount = isFreshUpdateSuccess(health, startedAt) ? successCount + 1 : 0;
         const minDelayElapsed = Date.now() - startedAt >= UPDATE_MIN_OVERLAY_MS;
-        if (minDelayElapsed && (successCount >= UPDATE_REQUIRED_SUCCESSES || updateResultRef.current?.exitCode === 0)) {
-          return true;
-        }
+        if (minDelayElapsed && (successCount >= UPDATE_REQUIRED_SUCCESSES || updateResultRef.current?.exitCode === 0)) return true;
       } catch (err) {
         successCount = 0;
       }
@@ -225,12 +332,12 @@ function DevPage({ onBack }) {
     return false;
   }, [token]);
 
-  const startUpdate = useCallback(async (mode, confirmText) => {
+  const startUpdate = useCallback(async (mode, confirmOptions) => {
     if (!token) {
       setError('Token DEV requis.');
       return;
     }
-    if (confirmText && !window.confirm(confirmText)) return;
+    if (confirmOptions && !(await confirm(confirmOptions))) return;
 
     const started = performance.now();
     const startedAt = Date.now();
@@ -286,7 +393,7 @@ function DevPage({ onBack }) {
     } finally {
       setLoading(false);
     }
-  }, [pollUntilUpdateReady, token]);
+  }, [confirm, pollUntilUpdateReady, token]);
 
   const retryUpdateCheck = useCallback(async () => {
     if (!token) {
@@ -299,9 +406,8 @@ function DevPage({ onBack }) {
     setUpdateOverlayState('updating');
     try {
       const ready = await pollUntilUpdateReady(startedAt, Date.now());
-      if (ready) {
-        setUpdateOverlayState('done');
-      } else {
+      if (ready) setUpdateOverlayState('done');
+      else {
         setUpdateOverlayState('timeout');
         setError('La mise à jour prend plus de temps que prévu.');
       }
@@ -344,7 +450,7 @@ function DevPage({ onBack }) {
           <section className="panel"><h3>Frontend</h3><Field label="application" value={frontendInfo.appName} /><Field label="appId" value={frontendInfo.appId} /><Field label="port par défaut" value={frontendInfo.defaultPort} /><Field label="version app" value={frontendInfo.version} /><Field label="build timestamp" value={frontendInfo.build} /><Field label="mode PWA" value={frontendInfo.pwaMode} /><Field label="standalone" value={frontendInfo.standalone} /><Field label="viewport" value={frontendInfo.viewport} /><Field label="app-height" value={frontendInfo.appHeight} /><Field label="visual viewport" value={frontendInfo.visual} /><Field label="online/offline" value={frontendInfo.online} /><Field label="user-agent" value={frontendInfo.userAgent} /></section>
           <section className="panel"><h3>Backend</h3><Field label="statut API" value={status?.backend?.status} /><Field label="uptime" value={status?.backend?.uptimeSeconds ? `${status.backend.uptimeSeconds}s` : '—'} /><Field label="version Node" value={status?.backend?.nodeVersion} /><Field label="environnement" value={status?.backend?.environment} /><Field label="timestamp serveur" value={status?.backend?.timestamp} /></section>
           <section className="panel"><h3>Host API</h3><Field label="statut" value={status?.host?.status} /><Field label="URL" value={status?.host?.url} /><Field label="workdir" value={status?.host?.workdir} /><Field label="dernière erreur" value={status?.host?.lastError} /><Field label="update status" value={status?.host?.updateStatus ? JSON.stringify(status.host.updateStatus) : '—'} /></section>
-          <section className="panel actions-panel"><h3>Actions</h3><button disabled={loading} onClick={refresh}>Rafraîchir les statuts</button><button disabled={loading} onClick={() => startUpdate('normal', 'Lancer la mise à jour normale ?')}>Mettre à jour l’app</button><button disabled={loading} onClick={() => startUpdate('force-pwa', 'Mettre à jour et forcer le rafraîchissement PWA ?')}>Mettre à jour + forcer PWA</button><button disabled={loading} onClick={() => run('restart', () => devApi.restart(token), 'Redémarrer les conteneurs ?')}>Redémarrer l’app</button><button disabled={loading} onClick={() => run('docker', () => devApi.docker(token))}>Voir état Docker</button><button disabled={loading} onClick={() => run('logs', () => devApi.logs(token))}>Voir logs récents</button></section>
+          <section className="panel actions-panel"><h3>Actions</h3><button disabled={loading} onClick={refresh}>Rafraîchir les statuts</button><button disabled={loading} onClick={() => startUpdate('normal', { title: 'Lancer la mise à jour ?', message: 'La mise à jour normale va reconstruire et redémarrer les services si nécessaire.', confirmLabel: 'Mettre à jour' })}>Mettre à jour l’app</button><button disabled={loading} onClick={() => startUpdate('force-pwa', { title: 'Forcer le rafraîchissement PWA ?', message: 'Cette action lance la mise à jour et force le nettoyage du build PWA généré.', confirmLabel: 'Mettre à jour + forcer' })}>Mettre à jour + forcer PWA</button><button disabled={loading} onClick={() => run('restart', () => devApi.restart(token), { title: 'Redémarrer l’app ?', message: 'Les conteneurs applicatifs vont être redémarrés.', confirmLabel: 'Redémarrer', variant: 'danger' })}>Redémarrer l’app</button><button disabled={loading} onClick={() => run('docker', () => devApi.docker(token))}>Voir état Docker</button><button disabled={loading} onClick={() => run('logs', () => devApi.logs(token))}>Voir logs récents</button></section>
         </div>
         <ActionResult result={result} loading={loading} />
       </main>
@@ -353,7 +459,7 @@ function DevPage({ onBack }) {
   );
 }
 
-function SettingsPage({ user, adminMode, onBack, onDev, onLogout, onToggleAdminMode, onUsers }) {
+function SettingsPage({ user, adminMode, onBack, onAbout, onDev, onLogout, onToggleAdminMode, onUsers }) {
   const isAdmin = user?.role === 'admin';
   const canShowAdministration = isAdmin && adminMode;
 
@@ -363,6 +469,7 @@ function SettingsPage({ user, adminMode, onBack, onDev, onLogout, onToggleAdminM
         <header className="sub-header"><button className="ghost-button" onClick={onBack}>← Fermer</button><h2>Paramètres</h2></header>
         <p>{appConfig.appDescription}</p>
         <section className="settings-section"><h3>Compte utilisateur</h3><Field label="utilisateur" value={user?.displayName || user?.username} /><Field label="identifiant" value={user?.username} /><Field label="rôle" value={user?.role} /><button className="danger-button" onClick={onLogout}>Déconnexion</button></section>
+        <section className="settings-section"><h3>Application</h3><p>Consultez les informations publiques du template et du build frontend.</p><button className="primary-button" onClick={onAbout}>À propos</button></section>
         {isAdmin && <section className="settings-section"><h3>Mode admin</h3><p>Activez ce mode local pour afficher les outils d'administration intégrés.</p><button className="primary-button" onClick={onToggleAdminMode}>{adminMode ? 'Désactiver le mode admin' : 'Activer le mode admin'}</button></section>}
         {canShowAdministration && <section className="settings-section admin-section"><h3>Administration</h3><button className="primary-button" onClick={onUsers}>Gestion des utilisateurs</button><button className="primary-button" onClick={onDev}>DEV</button></section>}
       </section>
@@ -387,17 +494,15 @@ function ResetPasswordForm({ user, onSubmit, onCancel }) {
   const [password, setPassword] = useState('');
   const submit = (event) => {
     event.preventDefault();
-    if (!window.confirm(`Réinitialiser le mot de passe de ${user.username} ?`)) return;
     onSubmit(password);
   };
   return <form className="modal-card" onSubmit={submit}><h3>Réinitialiser le mot de passe</h3><p>Définir un nouveau mot de passe pour <strong>{user.username}</strong>.</p><label>Nouveau mot de passe<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength="8" required /></label><div className="modal-actions"><button type="button" className="ghost-button" onClick={onCancel}>Annuler</button><button className="primary-button">Réinitialiser</button></div></form>;
 }
 
-function UserManagementPage({ onBack, currentUser, refreshCurrentUser }) {
+function UserManagementPage({ onBack, currentUser, refreshCurrentUser, confirm, notify }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [modal, setModal] = useState(null);
 
   const loadUsers = useCallback(async () => {
@@ -407,46 +512,59 @@ function UserManagementPage({ onBack, currentUser, refreshCurrentUser }) {
       const payload = await adminApi.listUsers();
       setUsers(payload.users || []);
     } catch (err) {
-      setError(err.message || 'Chargement impossible.');
+      const message = err.message || 'Chargement impossible.';
+      setError(message);
+      notify({ type: 'error', message });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [notify]);
 
   useEffect(() => { loadUsers(); }, [loadUsers]);
 
   const runAction = async (action, successMessage) => {
     setError('');
-    setSuccess('');
     try {
       await action();
-      setSuccess(successMessage);
+      notify({ type: 'success', message: successMessage });
       setModal(null);
       await loadUsers();
       await refreshCurrentUser();
     } catch (err) {
-      setError(err.message || 'Action impossible.');
+      const message = err.message || 'Action impossible.';
+      setError(message);
+      notify({ type: 'error', message });
     }
   };
 
   const createUser = (data) => runAction(() => adminApi.createUser(data), 'Utilisateur créé.');
-  const updateUser = (user, data) => {
-    if (user.role === 'admin' && data.role !== 'admin' && !window.confirm(`Retirer le rôle admin de ${user.username} ?`)) return;
-    if (user.active && !data.active && !window.confirm(`Désactiver ${user.username} ?`)) return;
+  const updateUser = async (user, data) => {
+    if (user.role === 'admin' && data.role !== 'admin') {
+      const confirmed = await confirm({ title: 'Retirer le rôle admin ?', message: `Retirer le rôle admin de ${user.username} ?`, confirmLabel: 'Retirer', variant: 'danger' });
+      if (!confirmed) return;
+    }
+    if (user.active && !data.active) {
+      const confirmed = await confirm({ title: 'Désactiver l’utilisateur ?', message: `Désactiver ${user.username} ?`, confirmLabel: 'Désactiver', variant: 'danger' });
+      if (!confirmed) return;
+    }
     runAction(() => adminApi.updateUser(user.id, data), 'Utilisateur modifié.');
   };
-  const deleteUser = (user) => {
-    if (!window.confirm(`Supprimer définitivement ${user.username} ?`)) return;
+  const deleteUser = async (user) => {
+    const confirmed = await confirm({ title: 'Supprimer l’utilisateur ?', message: `Supprimer définitivement ${user.username} ? Cette action est irréversible.`, confirmLabel: 'Supprimer', variant: 'danger' });
+    if (!confirmed) return;
     runAction(() => adminApi.deleteUser(user.id), 'Utilisateur supprimé.');
   };
-  const resetPassword = (user, password) => runAction(() => adminApi.resetPassword(user.id, password), 'Mot de passe réinitialisé.');
+  const resetPassword = async (user, password) => {
+    const confirmed = await confirm({ title: 'Réinitialiser le mot de passe ?', message: `Réinitialiser le mot de passe de ${user.username} ?`, confirmLabel: 'Réinitialiser', variant: 'danger' });
+    if (!confirmed) return;
+    runAction(() => adminApi.resetPassword(user.id, password), 'Mot de passe réinitialisé.');
+  };
 
   return (
     <main className="page admin-users-page">
       <header className="sub-header"><button className="ghost-button" onClick={onBack}>← Retour</button><h2>Gestion des utilisateurs</h2></header>
       <section className="panel admin-toolbar"><div><h3>Utilisateurs</h3><p>Routes protégées côté backend, session courante: {currentUser.username} ({currentUser.role}).</p></div><button className="primary-button" onClick={() => setModal({ type: 'create' })}>Créer un utilisateur</button></section>
       {error && <div className="error-box">{error}</div>}
-      {success && <div className="success-box">{success}</div>}
       {loading ? <section className="panel"><p>Chargement…</p></section> : <div className="users-grid">{users.map((user) => <article className="user-card" key={user.id}><div className="user-card-head"><div><h3>{user.displayName || user.username}</h3><p>@{user.username}</p></div><span className={`status-pill ${user.active ? 'active' : 'inactive'}`}>{user.active ? 'actif' : 'inactif'}</span></div><Field label="rôle" value={user.role} /><Field label="créé" value={formatDate(user.createdAt)} /><Field label="dernière connexion" value={formatDate(user.lastLoginAt)} /><div className="card-actions"><button onClick={() => setModal({ type: 'edit', user })}>Modifier</button><button onClick={() => setModal({ type: 'reset', user })}>Mot de passe</button><button className="danger-button" onClick={() => deleteUser(user)}>Supprimer</button></div></article>)}</div>}
       {modal && <div className="modal-backdrop" role="dialog" aria-modal="true">{modal.type === 'create' && <UserForm title="Créer un utilisateur" includePassword submitLabel="Créer" onCancel={() => setModal(null)} onSubmit={createUser} />}{modal.type === 'edit' && <UserForm title={`Modifier ${modal.user.username}`} initialUser={modal.user} submitLabel="Enregistrer" onCancel={() => setModal(null)} onSubmit={(data) => updateUser(modal.user, data)} />}{modal.type === 'reset' && <ResetPasswordForm user={modal.user} onCancel={() => setModal(null)} onSubmit={(password) => resetPassword(modal.user, password)} />}</div>}
     </main>
@@ -455,15 +573,41 @@ function UserManagementPage({ onBack, currentUser, refreshCurrentUser }) {
 
 export default function App() {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [page, setPage] = useState(window.location.pathname === '/login' ? 'login' : 'home');
+  const [page, setPage] = useState(() => routeFromPath(window.location.pathname));
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [adminMode, setAdminMode] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [confirmation, setConfirmation] = useState(null);
+  const confirmResolverRef = useRef(null);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--bg', appConfig.backgroundColor);
     document.documentElement.style.setProperty('--accent', appConfig.accentColor);
   }, []);
+
+  const removeNotification = useCallback((id) => {
+    setNotifications((current) => current.filter((notification) => notification.id !== id));
+  }, []);
+
+  const notify = useCallback(({ type = 'info', message, title, duration = NOTIFICATION_DEFAULT_DURATION_MS }) => {
+    if (!message) return null;
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setNotifications((current) => [...current, { id, type, title, message }]);
+    if (duration > 0) window.setTimeout(() => removeNotification(id), duration);
+    return id;
+  }, [removeNotification]);
+
+  const closeConfirmation = useCallback((accepted) => {
+    confirmResolverRef.current?.(accepted);
+    confirmResolverRef.current = null;
+    setConfirmation(null);
+  }, []);
+
+  const confirm = useCallback((options) => new Promise((resolve) => {
+    confirmResolverRef.current = resolve;
+    setConfirmation(options);
+  }), []);
 
   const refreshCurrentUser = useCallback(async () => {
     const payload = await authApi.me();
@@ -475,7 +619,7 @@ export default function App() {
     authApi.me().then((payload) => {
       setUser(payload.user);
       if (window.location.pathname === '/login') window.history.replaceState(null, '', '/');
-      setPage('home');
+      setPage(routeFromPath(window.location.pathname === '/login' ? '/' : window.location.pathname));
     }).catch(() => {
       setUser(null);
       setPage('login');
@@ -483,15 +627,20 @@ export default function App() {
     }).finally(() => setAuthLoading(false));
   }, []);
 
-  const navigate = (nextPage, path = '/') => {
+  const navigate = useCallback((nextPage, path = pagePaths[nextPage] || '/') => {
     setPage(nextPage);
     window.history.pushState(null, '', path);
+  }, []);
+
+  const navigateAndClose = (nextPage) => {
+    navigate(nextPage);
+    setDrawerOpen(false);
   };
 
   const handleLogin = (loggedUser) => {
     setUser(loggedUser);
     setAdminMode(false);
-    navigate('home', '/');
+    navigate('home');
   };
 
   const handleLogout = async () => {
@@ -499,12 +648,7 @@ export default function App() {
     setUser(null);
     setAdminMode(false);
     setDrawerOpen(false);
-    navigate('login', '/login');
-  };
-
-  const goSettings = () => {
-    navigate('settings');
-    setDrawerOpen(false);
+    navigate('login');
   };
 
   useEffect(() => {
@@ -516,10 +660,16 @@ export default function App() {
       setUser(null);
       setAdminMode(false);
       setDrawerOpen(false);
-      navigate('login', '/login');
+      navigate('login');
     };
     window.addEventListener('auth:unauthorized', handleUnauthorized);
     return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+  }, [navigate]);
+
+  useEffect(() => {
+    const handlePopState = () => setPage(routeFromPath(window.location.pathname));
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   if (authLoading) return <main className="login-page"><section className="login-card"><p>Vérification de la session…</p></section></main>;
@@ -531,15 +681,25 @@ export default function App() {
       <div className={`overlay ${drawerOpen ? 'visible' : ''}`} onClick={() => setDrawerOpen(false)} />
       <aside className={`drawer ${drawerOpen ? 'open' : ''}`} aria-hidden={!drawerOpen}>
         <div className="drawer-header"><strong>{appConfig.appName}</strong><button className="close-button" aria-label="Fermer" onClick={() => setDrawerOpen(false)}>×</button></div>
-        <button className="drawer-link" onClick={goSettings}>Paramètres</button>
-        {user.role === 'admin' && adminMode && <button className="drawer-link" onClick={() => { navigate('users'); setDrawerOpen(false); }}>Gestion des utilisateurs</button>}
+        <nav className="drawer-nav" aria-label="Navigation principale">
+          <button className="drawer-link" onClick={() => navigateAndClose('home')}>Accueil</button>
+          <button className="drawer-link" onClick={() => navigateAndClose('module1')}>Module 1</button>
+          <button className="drawer-link" onClick={() => navigateAndClose('module2')}>Module 2</button>
+          <button className="drawer-link" onClick={() => navigateAndClose('settings')}>Paramètres</button>
+          {user.role === 'admin' && adminMode && <button className="drawer-link" onClick={() => navigateAndClose('users')}>Gestion des utilisateurs</button>}
+        </nav>
       </aside>
-      {page === 'home' && <main className="page home-page"><p>{appConfig.appDescription}</p></main>}
-      {page === 'settings' && <SettingsPage user={user} adminMode={adminMode} onBack={() => navigate('home')} onDev={() => navigate('dev')} onLogout={handleLogout} onToggleAdminMode={() => setAdminMode((value) => !value)} onUsers={() => navigate('users')} />}
-      {page === 'dev' && user.role === 'admin' && adminMode && <DevPage onBack={() => navigate('settings')} />}
+      {page === 'home' && <HomePage />}
+      {page === 'module1' && <ModulePlaceholderPage title="Module 1" />}
+      {page === 'module2' && <ModulePlaceholderPage title="Module 2" />}
+      {page === 'settings' && <SettingsPage user={user} adminMode={adminMode} onBack={() => navigate('home')} onAbout={() => navigate('about')} onDev={() => navigate('dev')} onLogout={handleLogout} onToggleAdminMode={() => setAdminMode((value) => !value)} onUsers={() => navigate('users')} />}
+      {page === 'about' && <AboutPage onBack={() => navigate('settings')} />}
+      {page === 'dev' && user.role === 'admin' && adminMode && <DevPage onBack={() => navigate('settings')} confirm={confirm} />}
       {page === 'dev' && (user.role !== 'admin' || !adminMode) && <main className="page narrow-page"><section className="panel"><p>Mode admin requis.</p><button onClick={() => navigate('settings')}>Retour paramètres</button></section></main>}
-      {page === 'users' && user.role === 'admin' && adminMode && <UserManagementPage currentUser={user} refreshCurrentUser={refreshCurrentUser} onBack={() => navigate('settings')} />}
+      {page === 'users' && user.role === 'admin' && adminMode && <UserManagementPage currentUser={user} refreshCurrentUser={refreshCurrentUser} onBack={() => navigate('settings')} confirm={confirm} notify={notify} />}
       {page === 'users' && (user.role !== 'admin' || !adminMode) && <main className="page narrow-page"><section className="panel"><p>Mode admin requis.</p><button onClick={() => navigate('settings')}>Retour paramètres</button></section></main>}
+      <NotificationCenter notifications={notifications} onClose={removeNotification} />
+      <ConfirmDialog confirmation={confirmation} onCancel={() => closeConfirmation(false)} onConfirm={() => closeConfirmation(true)} />
     </div>
   );
 }
