@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { devApi } from '../services/devApi.js';
 import { appConfig } from '../config/appConfig.js';
 import { APP_VERSION, BUILD_TIMESTAMP } from '../config/buildInfo.js';
@@ -6,6 +7,7 @@ import { Field } from '../components/Field.jsx';
 import { DotSpinner } from '../components/DotSpinner.jsx';
 import { UpdateOverlay } from '../components/UpdateOverlay.jsx';
 import { getViewportInfo, isStandalone } from '../viewport.js';
+import { ROUTES } from '../router.js';
 
 const UPDATE_MIN_OVERLAY_MS = 3500;
 const UPDATE_POLL_INTERVAL_MS = 2500;
@@ -64,7 +66,9 @@ const ActionResult = ({ result, loading }) => (
   </section>
 );
 
-export function DevPage({ onBack, confirm }) {
+export function DevPage() {
+  const navigate = useNavigate();
+  const { confirm } = useOutletContext();
   const [token, setToken] = useState(() => localStorage.getItem('devAdminToken') || '');
   const [status, setStatus] = useState(null);
   const [result, setResult] = useState(null);
@@ -249,7 +253,7 @@ export function DevPage({ onBack, confirm }) {
   return (
     <>
       <main className={`page dev-page${updateOverlayState ? ' page-blurred' : ''}`} aria-hidden={updateOverlayState ? 'true' : undefined}>
-        <header className="sub-header"><button className="ghost-button" onClick={onBack}>← Retour</button><h2>DEV</h2></header>
+        <header className="sub-header"><button className="ghost-button" onClick={() => navigate(ROUTES.settings)}>← Retour</button><h2>DEV</h2></header>
         <section className="panel token-panel">
           <label>Token DEV<input type="password" value={token} placeholder="Saisir DEV_ADMIN_TOKEN" onChange={(event) => saveToken(event.target.value)} autoComplete="off" /></label>
           <p>Le token est stocké localement dans ce navigateur et n'est jamais affiché en clair.</p>
