@@ -75,13 +75,13 @@ export function UserManagementPage() {
       if (!confirmed) return;
     }
     if (user.active && !data.active) {
-      const confirmed = await confirm({ title: 'Désactiver l'utilisateur ?', message: `Désactiver ${user.username} ?`, confirmLabel: 'Désactiver', variant: 'danger' });
+      const confirmed = await confirm({ title: `Désactiver l'utilisateur ?`, message: `Désactiver ${user.username} ?`, confirmLabel: 'Désactiver', variant: 'danger' });
       if (!confirmed) return;
     }
     runAction(() => adminApi.updateUser(user.id, data), 'Utilisateur modifié.');
   };
   const deleteUser = async (user) => {
-    const confirmed = await confirm({ title: 'Supprimer l'utilisateur ?', message: `Supprimer définitivement ${user.username} ? Cette action est irréversible.`, confirmLabel: 'Supprimer', variant: 'danger' });
+    const confirmed = await confirm({ title: `Supprimer l'utilisateur ?`, message: `Supprimer définitivement ${user.username} ? Cette action est irréversible.`, confirmLabel: 'Supprimer', variant: 'danger' });
     if (!confirmed) return;
     runAction(() => adminApi.deleteUser(user.id), 'Utilisateur supprimé.');
   };
