@@ -8,6 +8,6 @@
     "dev": "node --watch src/server.js"
   },
   "dependencies": {
-    "express": "latest"
+    "express": "^5.2.1"
   }
 }
