@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '../services/authApi.js';
 import { appConfig } from '../config/appConfig.js';
 import { ROUTES } from '../router.js';
+import { AuthContext } from '../context/AuthContext.jsx';
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const { setUser } = useContext(AuthContext);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -16,7 +18,8 @@ export function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      await authApi.login(username, password);
+      const payload = await authApi.login(username, password);
+      setUser(payload.user);
       navigate(ROUTES.home);
     } catch (err) {
       setError(err.message || 'Connexion impossible.');
