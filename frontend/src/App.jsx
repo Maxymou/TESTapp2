@@ -209,7 +209,7 @@ function HomePage() {
       <section className="panel welcome-card">
         <p className="eyebrow">Accueil</p>
         <h2>{appConfig.appName}</h2>
-        <p>Bienvenue dans l’application.</p>
+        <p>Bienvenue dans l'application.</p>
         <div className="placeholder-note">
           <h3>Point de départ</h3>
           <p>Cette page est le point de départ du futur module métier. Remplacez ce contenu par les pages spécifiques de la nouvelle application.</p>
@@ -228,7 +228,7 @@ function ModulePlaceholderPage({ title }) {
         <p>Emplacement réservé pour un futur module métier.</p>
         <div className="placeholder-note">
           <h3>Template</h3>
-          <p>Remplacez cette carte par l’écran, les services et les composants métier de votre application.</p>
+          <p>Remplacez cette carte par l'écran, les services et les composants métier de votre application.</p>
         </div>
       </section>
     </main>
@@ -256,7 +256,8 @@ function AboutPage({ onBack }) {
 }
 
 function DevPage({ onBack, confirm }) {
-  const [token, setToken] = useState(() => localStorage.getItem('devAdminToken') || '');
+  // sessionStorage au lieu de localStorage : le token n'est pas conservé entre onglets/sessions (atténue les vecteurs XSS persistants)
+  const [token, setToken] = useState(() => sessionStorage.getItem('devAdminToken') || '');
   const [status, setStatus] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
@@ -286,7 +287,7 @@ function DevPage({ onBack, confirm }) {
 
   const saveToken = (value) => {
     setToken(value);
-    localStorage.setItem('devAdminToken', value);
+    sessionStorage.setItem('devAdminToken', value);
   };
 
   const run = useCallback(async (label, fn, confirmOptions) => {
@@ -450,7 +451,7 @@ function DevPage({ onBack, confirm }) {
           <section className="panel"><h3>Frontend</h3><Field label="application" value={frontendInfo.appName} /><Field label="appId" value={frontendInfo.appId} /><Field label="port par défaut" value={frontendInfo.defaultPort} /><Field label="version app" value={frontendInfo.version} /><Field label="build timestamp" value={frontendInfo.build} /><Field label="mode PWA" value={frontendInfo.pwaMode} /><Field label="standalone" value={frontendInfo.standalone} /><Field label="viewport" value={frontendInfo.viewport} /><Field label="app-height" value={frontendInfo.appHeight} /><Field label="visual viewport" value={frontendInfo.visual} /><Field label="online/offline" value={frontendInfo.online} /><Field label="user-agent" value={frontendInfo.userAgent} /></section>
           <section className="panel"><h3>Backend</h3><Field label="statut API" value={status?.backend?.status} /><Field label="uptime" value={status?.backend?.uptimeSeconds ? `${status.backend.uptimeSeconds}s` : '—'} /><Field label="version Node" value={status?.backend?.nodeVersion} /><Field label="environnement" value={status?.backend?.environment} /><Field label="timestamp serveur" value={status?.backend?.timestamp} /></section>
           <section className="panel"><h3>Host API</h3><Field label="statut" value={status?.host?.status} /><Field label="URL" value={status?.host?.url} /><Field label="workdir" value={status?.host?.workdir} /><Field label="dernière erreur" value={status?.host?.lastError} /><Field label="update status" value={status?.host?.updateStatus ? JSON.stringify(status.host.updateStatus) : '—'} /></section>
-          <section className="panel actions-panel"><h3>Actions</h3><button disabled={loading} onClick={refresh}>Rafraîchir les statuts</button><button disabled={loading} onClick={() => startUpdate('normal', { title: 'Lancer la mise à jour ?', message: 'La mise à jour normale va reconstruire et redémarrer les services si nécessaire.', confirmLabel: 'Mettre à jour' })}>Mettre à jour l’app</button><button disabled={loading} onClick={() => startUpdate('force-pwa', { title: 'Forcer le rafraîchissement PWA ?', message: 'Cette action lance la mise à jour et force le nettoyage du build PWA généré.', confirmLabel: 'Mettre à jour + forcer' })}>Mettre à jour + forcer PWA</button><button disabled={loading} onClick={() => run('restart', () => devApi.restart(token), { title: 'Redémarrer l’app ?', message: 'Les conteneurs applicatifs vont être redémarrés.', confirmLabel: 'Redémarrer', variant: 'danger' })}>Redémarrer l’app</button><button disabled={loading} onClick={() => run('docker', () => devApi.docker(token))}>Voir état Docker</button><button disabled={loading} onClick={() => run('logs', () => devApi.logs(token))}>Voir logs récents</button></section>
+          <section className="panel actions-panel"><h3>Actions</h3><button disabled={loading} onClick={refresh}>Rafraîchir les statuts</button><button disabled={loading} onClick={() => startUpdate('normal', { title: 'Lancer la mise à jour ?', message: 'La mise à jour normale va reconstruire et redémarrer les services si nécessaire.', confirmLabel: 'Mettre à jour' })}>Mettre à jour l'app</button><button disabled={loading} onClick={() => startUpdate('force-pwa', { title: 'Forcer le rafraîchissement PWA ?', message: 'Cette action lance la mise à jour et force le nettoyage du build PWA généré.', confirmLabel: 'Mettre à jour + forcer' })}>Mettre à jour + forcer PWA</button><button disabled={loading} onClick={() => run('restart', () => devApi.restart(token), { title: 'Redémarrer l’app ?', message: 'Les conteneurs applicatifs vont être redémarrés.', confirmLabel: 'Redémarrer', variant: 'danger' })}>Redémarrer l'app</button><button disabled={loading} onClick={() => run('docker', () => devApi.docker(token))}>Voir état Docker</button><button disabled={loading} onClick={() => run('logs', () => devApi.logs(token))}>Voir logs récents</button></section>
         </div>
         <ActionResult result={result} loading={loading} />
       </main>
@@ -540,22 +541,22 @@ function UserManagementPage({ onBack, currentUser, refreshCurrentUser, confirm, 
   const createUser = (data) => runAction(() => adminApi.createUser(data), 'Utilisateur créé.');
   const updateUser = async (user, data) => {
     if (user.role === 'admin' && data.role !== 'admin') {
-      const confirmed = await confirm({ title: 'Retirer le rôle admin ?', message: `Retirer le rôle admin de ${user.username} ?`, confirmLabel: 'Retirer', variant: 'danger' });
+      const confirmed = await confirm({ title: 'Retirer le rôle admin ?', message: `Retirer le rôle admin de ${user.username} ?`, confirmLabel: 'Retirer', variant: 'danger' });
       if (!confirmed) return;
     }
     if (user.active && !data.active) {
-      const confirmed = await confirm({ title: 'Désactiver l’utilisateur ?', message: `Désactiver ${user.username} ?`, confirmLabel: 'Désactiver', variant: 'danger' });
+      const confirmed = await confirm({ title: 'Désactiver l’utilisateur ?', message: `Désactiver ${user.username} ?`, confirmLabel: 'Désactiver', variant: 'danger' });
       if (!confirmed) return;
     }
     runAction(() => adminApi.updateUser(user.id, data), 'Utilisateur modifié.');
   };
   const deleteUser = async (user) => {
-    const confirmed = await confirm({ title: 'Supprimer l’utilisateur ?', message: `Supprimer définitivement ${user.username} ? Cette action est irréversible.`, confirmLabel: 'Supprimer', variant: 'danger' });
+    const confirmed = await confirm({ title: 'Supprimer l’utilisateur ?', message: `Supprimer définitivement ${user.username} ? Cette action est irréversible.`, confirmLabel: 'Supprimer', variant: 'danger' });
     if (!confirmed) return;
     runAction(() => adminApi.deleteUser(user.id), 'Utilisateur supprimé.');
   };
   const resetPassword = async (user, password) => {
-    const confirmed = await confirm({ title: 'Réinitialiser le mot de passe ?', message: `Réinitialiser le mot de passe de ${user.username} ?`, confirmLabel: 'Réinitialiser', variant: 'danger' });
+    const confirmed = await confirm({ title: 'Réinitialiser le mot de passe ?', message: `Réinitialiser le mot de passe de ${user.username} ?`, confirmLabel: 'Réinitialiser', variant: 'danger' });
     if (!confirmed) return;
     runAction(() => adminApi.resetPassword(user.id, password), 'Mot de passe réinitialisé.');
   };
