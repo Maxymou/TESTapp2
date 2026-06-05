@@ -17,7 +17,11 @@ export function useAuth() {
   useEffect(() => {
     authApi.me().then((payload) => {
       setUser(payload.user);
-      navigate(ROUTES.home, { replace: true });
+      // Ne rediriger vers l'accueil que si on arrive depuis la page de login.
+      // Sur toute autre URL, React Router et RequireAuth gèrent la protection des routes.
+      if (window.location.pathname === ROUTES.login) {
+        navigate(ROUTES.home, { replace: true });
+      }
     }).catch(() => {
       setUser(null);
       navigate(ROUTES.login, { replace: true });

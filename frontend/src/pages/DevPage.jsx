@@ -69,7 +69,8 @@ const ActionResult = ({ result, loading }) => (
 export function DevPage() {
   const navigate = useNavigate();
   const { confirm } = useOutletContext();
-  const [token, setToken] = useState(() => localStorage.getItem('devAdminToken') || '');
+  // sessionStorage : le token ne persiste pas entre les onglets ni après fermeture du navigateur
+  const [token, setToken] = useState(() => sessionStorage.getItem('devAdminToken') || '');
   const [status, setStatus] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
@@ -99,7 +100,7 @@ export function DevPage() {
 
   const saveToken = (value) => {
     setToken(value);
-    localStorage.setItem('devAdminToken', value);
+    sessionStorage.setItem('devAdminToken', value);
   };
 
   const run = useCallback(async (label, fn, confirmOptions) => {
