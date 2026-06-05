@@ -19,6 +19,13 @@ const lockoutMs = 5 * 60 * 1000;
 
 app.use(express.json({ limit: '16kb' }));
 
+const requireXhrHeader = (req, res, next) => {
+  if ((req.get('x-requested-with') || '').toLowerCase() !== 'xmlhttprequest') {
+    return res.status(403).json({ error: 'Header CSRF manquant.' });
+  }
+  return next();
+};
+
 const nowIso = () => new Date().toISOString();
 
 const defaultStore = () => ({ users: [], sessions: [] });
@@ -47,11 +54,15 @@ const writeStore = async (store) => {
   await fs.rename(tempPath, dataPath);
 };
 
-const mutateStore = async (mutator) => {
-  const store = await readStore();
-  const result = await mutator(store);
-  await writeStore(store);
-  return result;
+let storeLock = Promise.resolve();
+const mutateStore = (mutator) => {
+  storeLock = storeLock.then(async () => {
+    const store = await readStore();
+    const result = await mutator(store);
+    await writeStore(store);
+    return result;
+  });
+  return storeLock;
 };
 
 const hashPassword = (password) => {
@@ -272,7 +283,7 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'backend' });
 });
 
-app.post('/api/auth/login', async (req, res, next) => {
+app.post('/api/auth/login', requireXhrHeader, async (req, res, next) => {
   try {
     const username = normalizeUsername(req.body?.username);
     const password = String(req.body?.password || '');
@@ -301,7 +312,7 @@ app.post('/api/auth/login', async (req, res, next) => {
   }
 });
 
-app.post('/api/auth/logout', requireAuth, async (req, res, next) => {
+app.post('/api/auth/logout', requireXhrHeader, requireAuth, async (req, res, next) => {
   try {
     const token = getSessionToken(req);
     if (token) {
@@ -330,7 +341,7 @@ app.get('/api/admin/users', requireAppAdmin, async (_req, res, next) => {
   }
 });
 
-app.post('/api/admin/users', requireAppAdmin, async (req, res, next) => {
+app.post('/api/admin/users', requireXhrHeader, requireAppAdmin, async (req, res, next) => {
   try {
     const username = normalizeUsername(req.body?.username);
     const password = String(req.body?.password || '');
@@ -355,7 +366,7 @@ app.post('/api/admin/users', requireAppAdmin, async (req, res, next) => {
   }
 });
 
-app.patch('/api/admin/users/:id', requireAppAdmin, async (req, res, next) => {
+app.patch('/api/admin/users/:id', requireXhrHeader, requireAppAdmin, async (req, res, next) => {
   try {
     const user = await mutateStore(async (store) => {
       const existing = store.users.find((candidate) => candidate.id === req.params.id);
@@ -397,7 +408,7 @@ app.patch('/api/admin/users/:id', requireAppAdmin, async (req, res, next) => {
   }
 });
 
-app.delete('/api/admin/users/:id', requireAppAdmin, async (req, res, next) => {
+app.delete('/api/admin/users/:id', requireXhrHeader, requireAppAdmin, async (req, res, next) => {
   try {
     await mutateStore(async (store) => {
       const existing = store.users.find((candidate) => candidate.id === req.params.id);
@@ -420,7 +431,7 @@ app.delete('/api/admin/users/:id', requireAppAdmin, async (req, res, next) => {
   }
 });
 
-app.post('/api/admin/users/:id/reset-password', requireAppAdmin, async (req, res, next) => {
+app.post('/api/admin/users/:id/reset-password', requireXhrHeader, requireAppAdmin, async (req, res, next) => {
   try {
     const password = String(req.body?.password || '');
     if (!password || password.length < 8) return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 8 caractères.' });
@@ -450,7 +461,7 @@ app.get('/api/dev/health', requireDevAdmin, async (_req, res) => {
   }
 });
 
-app.post('/api/dev/update', requireDevAdmin, async (req, res) => {
+app.post('/api/dev/update', requireXhrHeader, requireDevAdmin, async (req, res) => {
   const mode = req.body?.mode;
   if (!['normal', 'force-pwa'].includes(mode)) {
     return res.status(400).json({ error: 'Mode update invalide.' });
@@ -459,7 +470,7 @@ app.post('/api/dev/update', requireDevAdmin, async (req, res) => {
   return res.json(result);
 });
 
-app.post('/api/dev/restart', requireDevAdmin, async (_req, res) => {
+app.post('/api/dev/restart', requireXhrHeader, requireDevAdmin, async (_req, res) => {
   const result = await callHost('/restart', { method: 'POST' });
   return res.json(result);
 });

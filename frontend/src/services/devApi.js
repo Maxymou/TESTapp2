@@ -1,5 +1,6 @@
 const jsonHeaders = (token) => ({
   'Content-Type': 'application/json',
+  'X-Requested-With': 'XMLHttpRequest',
   ...(token ? { 'x-dev-admin-token': token } : {})
 });
 
