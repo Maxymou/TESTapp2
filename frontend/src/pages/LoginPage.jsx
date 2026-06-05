@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { authApi } from '../services/authApi.js';
 import { appConfig } from '../config/appConfig.js';
+import { ROUTES } from '../router.js';
 
-export function LoginPage({ onLogin }) {
+export function LoginPage() {
+  const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -13,8 +16,8 @@ export function LoginPage({ onLogin }) {
     setLoading(true);
     setError('');
     try {
-      const payload = await authApi.login(username, password);
-      onLogin(payload.user);
+      await authApi.login(username, password);
+      navigate(ROUTES.home);
     } catch (err) {
       setError(err.message || 'Connexion impossible.');
     } finally {

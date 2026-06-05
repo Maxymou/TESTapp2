@@ -13,7 +13,8 @@
     "vite": "latest",
     "vite-plugin-pwa": "latest",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "react-router-dom": "^7.0.0"
   },
   "devDependencies": {}
 }

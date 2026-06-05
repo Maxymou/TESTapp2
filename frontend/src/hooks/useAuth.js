@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { authApi } from '../services/authApi.js';
-import { routeFromPath } from '../router.js';
+import { ROUTES } from '../router.js';
 
-export function useAuth(navigate) {
+export function useAuth() {
+  const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
@@ -15,13 +17,10 @@ export function useAuth(navigate) {
   useEffect(() => {
     authApi.me().then((payload) => {
       setUser(payload.user);
-      const targetPath = window.location.pathname === '/login' ? '/' : window.location.pathname;
-      window.history.replaceState(null, '', targetPath);
-      navigate(routeFromPath(targetPath), null);
+      navigate(ROUTES.home, { replace: true });
     }).catch(() => {
       setUser(null);
-      window.history.replaceState(null, '', '/login');
-      navigate('login', null);
+      navigate(ROUTES.login, { replace: true });
     }).finally(() => setAuthLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -29,7 +28,7 @@ export function useAuth(navigate) {
   useEffect(() => {
     const handleUnauthorized = () => {
       setUser(null);
-      navigate('login');
+      navigate(ROUTES.login);
     };
     window.addEventListener('auth:unauthorized', handleUnauthorized);
     return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
