@@ -6,5 +6,6 @@ export const ROUTES = {
   about:    '/about',
   users:    '/settings/users',
   dev:      '/settings/dev',
+  customization: '/settings/customization',
   login:    '/login',
 };
