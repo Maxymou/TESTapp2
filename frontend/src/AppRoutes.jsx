@@ -8,6 +8,7 @@ import { AboutPage } from './pages/AboutPage.jsx';
 import { SettingsPage } from './pages/SettingsPage.jsx';
 import { DevPage } from './pages/DevPage.jsx';
 import { UserManagementPage } from './pages/UserManagementPage.jsx';
+import { CustomizationPage } from './pages/CustomizationPage.jsx';
 import { RequireAuth } from './components/RequireAuth.jsx';
 import { RequireAdminMode } from './components/RequireAdminMode.jsx';
 
@@ -31,6 +32,16 @@ const router = createBrowserRouter([
           <RequireAuth>
             <RequireAdminMode>
               <DevPage />
+            </RequireAdminMode>
+          </RequireAuth>
+        ),
+      },
+      {
+        path: ROUTES.customization,
+        element: (
+          <RequireAuth>
+            <RequireAdminMode>
+              <CustomizationPage />
             </RequireAdminMode>
           </RequireAuth>
         ),

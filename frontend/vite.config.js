@@ -49,6 +49,7 @@ export default defineConfig({
       },
       workbox: {
         cleanupOutdatedCaches: true,
+        globIgnores: ['**/manifest.webmanifest'],
         navigateFallback: '/index.html'
       }
     })

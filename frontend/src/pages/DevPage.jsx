@@ -8,6 +8,7 @@ import { DotSpinner } from '../components/DotSpinner.jsx';
 import { UpdateOverlay } from '../components/UpdateOverlay.jsx';
 import { getViewportInfo, isStandalone } from '../viewport.js';
 import { ROUTES } from '../router.js';
+import { useAppCustomization } from '../context/AppCustomizationContext.jsx';
 
 const UPDATE_MIN_OVERLAY_MS = 3500;
 const UPDATE_POLL_INTERVAL_MS = 2500;
@@ -69,6 +70,7 @@ const ActionResult = ({ result, loading }) => (
 export function DevPage() {
   const navigate = useNavigate();
   const { confirm } = useOutletContext();
+  const { customization } = useAppCustomization();
   // sessionStorage : le token ne persiste pas entre les onglets ni après fermeture du navigateur
   const [token, setToken] = useState(() => sessionStorage.getItem('devAdminToken') || '');
   const [status, setStatus] = useState(null);
@@ -237,7 +239,7 @@ export function DevPage() {
   }, []);
 
   const frontendInfo = useMemo(() => ({
-    appName: appConfig.appName,
+    appName: customization.appName,
     appId: appConfig.appId,
     defaultPort: appConfig.defaultPort,
     version: APP_VERSION,
@@ -249,7 +251,7 @@ export function DevPage() {
     visual: viewport.visualViewport ? JSON.stringify(viewport.visualViewport) : 'non disponible',
     userAgent: navigator.userAgent,
     online: online ? 'online' : 'offline'
-  }), [online, viewport]);
+  }), [customization.appName, online, viewport]);
 
   return (
     <>

@@ -10,6 +10,9 @@ const requestTimeoutMs = Number(process.env.DEV_REQUEST_TIMEOUT_MS || 120000);
 const adminToken = process.env.DEV_ADMIN_TOKEN || '';
 const hostToken = process.env.DEV_ALLOWED_TOKEN || '';
 const dataPath = process.env.USER_DATA_PATH || '/data/users.json';
+const runtimePath = process.env.RUNTIME_PATH || path.resolve(process.cwd(), 'runtime');
+const customizationPath = process.env.APP_CUSTOMIZATION_PATH || path.join(runtimePath, 'app-config.json');
+const uploadsPath = process.env.APP_UPLOADS_PATH || path.join(runtimePath, 'uploads');
 const sessionSecret = process.env.SESSION_SECRET || '';
 const sessionTtlMs = Number(process.env.SESSION_TTL_HOURS || 24) * 60 * 60 * 1000;
 const cookieName = process.env.SESSION_COOKIE_NAME || 'testapp2_session';
@@ -18,6 +21,171 @@ const maxLoginFailures = 5;
 const lockoutMs = 5 * 60 * 1000;
 
 app.use(express.json({ limit: '16kb' }));
+
+
+const defaultCustomization = Object.freeze({
+  appName: 'TESTapp2',
+  shortName: 'TESTapp2',
+  description: 'Application PWA de base',
+  welcomeText: 'Bienvenue sur TESTapp2',
+  organizationName: '',
+  supportEmail: '',
+  primaryColor: '#2563eb',
+  secondaryColor: '#64748b',
+  logoUrl: '/icons/icon-192.png',
+  pwaIconUrl: '/icons/icon-512.png',
+  githubUrl: '',
+  websiteUrl: ''
+});
+
+const customizationLimits = {
+  appName: 80,
+  shortName: 24,
+  description: 300,
+  welcomeText: 200,
+  organizationName: 120,
+  supportEmail: 160,
+  primaryColor: 7,
+  secondaryColor: 7,
+  logoUrl: 240,
+  pwaIconUrl: 240,
+  githubUrl: 240,
+  websiteUrl: 240
+};
+
+const readCustomization = async () => {
+  try {
+    const raw = await fs.readFile(customizationPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    return validateCustomization(parsed, { partial: false });
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      await writeCustomization(defaultCustomization);
+      return { ...defaultCustomization };
+    }
+    throw error;
+  }
+};
+
+const writeCustomization = async (customization) => {
+  await fs.mkdir(path.dirname(customizationPath), { recursive: true });
+  const tempPath = `${customizationPath}.${process.pid}.tmp`;
+  await fs.writeFile(tempPath, JSON.stringify(customization, null, 2));
+  await fs.rename(tempPath, customizationPath);
+};
+
+let customizationLock = Promise.resolve();
+const mutateCustomization = (mutator) => {
+  customizationLock = customizationLock.then(async () => {
+    const current = await readCustomization();
+    const next = await mutator(current);
+    await writeCustomization(next);
+    return next;
+  });
+  return customizationLock;
+};
+
+const validateUrl = (value, label) => {
+  if (!value) return '';
+  try {
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('protocol');
+    return url.toString();
+  } catch {
+    const error = new Error(`${label} doit être une URL http(s) valide.`);
+    error.statusCode = 400;
+    throw error;
+  }
+};
+
+const validateCustomization = (payload, { partial = true } = {}) => {
+  const source = partial ? payload : { ...defaultCustomization, ...(payload || {}) };
+  const allowedKeys = Object.keys(defaultCustomization);
+  const normalized = partial ? {} : { ...defaultCustomization };
+  for (const key of allowedKeys) {
+    if (partial && !Object.hasOwn(source || {}, key)) continue;
+    const rawValue = source?.[key];
+    let value = typeof rawValue === 'string' ? rawValue.trim() : '';
+    if (!partial && !value && ['appName', 'shortName', 'description', 'welcomeText', 'primaryColor', 'secondaryColor', 'logoUrl', 'pwaIconUrl'].includes(key)) {
+      value = defaultCustomization[key];
+    }
+    if (value.length > customizationLimits[key]) {
+      const error = new Error(`${key} dépasse la longueur maximale autorisée.`);
+      error.statusCode = 400;
+      throw error;
+    }
+    if (['appName', 'shortName'].includes(key) && !value) {
+      const error = new Error(`${key} est obligatoire.`);
+      error.statusCode = 400;
+      throw error;
+    }
+    if (['primaryColor', 'secondaryColor'].includes(key) && !/^#[0-9a-fA-F]{6}$/.test(value)) {
+      const error = new Error(`${key} doit être une couleur hexadécimale valide.`);
+      error.statusCode = 400;
+      throw error;
+    }
+    if (key === 'supportEmail' && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      const error = new Error('Email de support invalide.');
+      error.statusCode = 400;
+      throw error;
+    }
+    if (['githubUrl', 'websiteUrl'].includes(key)) value = validateUrl(value, key);
+    normalized[key] = value;
+  }
+  return normalized;
+};
+
+const sanitizeUploadName = (name) => path.basename(decodeURIComponent(String(name || 'image'))).replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 80) || 'image';
+const extensionFromType = (contentType) => ({
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/webp': '.webp',
+  'image/svg+xml': '.svg'
+})[String(contentType || '').split(';')[0].toLowerCase()] || '';
+const allowedImageExtensions = new Set(['.png', '.jpg', '.jpeg', '.webp', '.svg']);
+
+const imageTypeFromUrl = (url) => {
+  const extension = path.extname(String(url || '')).toLowerCase();
+  if (extension === '.svg') return 'image/svg+xml';
+  if (extension === '.webp') return 'image/webp';
+  if (extension === '.jpg' || extension === '.jpeg') return 'image/jpeg';
+  return 'image/png';
+};
+
+const looksLikeAllowedImage = (buffer, extension) => {
+  if (!Buffer.isBuffer(buffer) || buffer.length === 0) return false;
+  if (extension === '.png') return buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  if (extension === '.jpg' || extension === '.jpeg') return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  if (extension === '.webp') return buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WEBP';
+  if (extension === '.svg') {
+    const start = buffer.subarray(0, Math.min(buffer.length, 512)).toString('utf8').trimStart().toLowerCase();
+    return start.startsWith('<svg') || start.startsWith('<?xml') && start.includes('<svg');
+  }
+  return false;
+};
+
+const handleImageUpload = (field) => async (req, res, next) => {
+  try {
+    const fileName = sanitizeUploadName(req.get('x-file-name'));
+    const declaredExtension = path.extname(fileName).toLowerCase();
+    const contentTypeExtension = extensionFromType(req.get('content-type'));
+    const extension = contentTypeExtension || declaredExtension;
+    if (!allowedImageExtensions.has(extension) || !req.is(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'])) {
+      return res.status(400).json({ error: 'Format image non autorisé. Utilisez png, jpg, jpeg, webp ou svg.' });
+    }
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) return res.status(400).json({ error: 'Fichier image manquant.' });
+    if (!looksLikeAllowedImage(req.body, extension)) return res.status(400).json({ error: 'Le contenu du fichier ne correspond pas à une image valide.' });
+    await fs.mkdir(uploadsPath, { recursive: true });
+    const prefix = field === 'logoUrl' ? 'logo' : 'pwa-icon';
+    const safePath = path.join(uploadsPath, `${prefix}-${crypto.randomUUID()}${extension === '.jpeg' ? '.jpg' : extension}`);
+    await fs.writeFile(safePath, req.body, { mode: 0o644 });
+    const url = `/uploads/${path.basename(safePath)}`;
+    const customization = await mutateCustomization((current) => ({ ...current, [field]: url }));
+    return res.json({ customization, url });
+  } catch (error) {
+    return next(error);
+  }
+};
 
 const requireXhrHeader = (req, res, next) => {
   if ((req.get('x-requested-with') || '').toLowerCase() !== 'xmlhttprequest') {
@@ -279,6 +447,66 @@ const callHost = async (apiPath, { method = 'GET', body } = {}) => {
   }
 };
 
+
+app.use('/uploads', express.static(uploadsPath, {
+  fallthrough: false,
+  immutable: true,
+  maxAge: '30d'
+}));
+
+app.get('/api/app-customization', async (_req, res, next) => {
+  try {
+    res.json({ customization: await readCustomization() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/app-customization', requireXhrHeader, requireAppAdmin, async (req, res, next) => {
+  try {
+    const patch = validateCustomization(req.body || {}, { partial: true });
+    const customization = await mutateCustomization((current) => validateCustomization({ ...current, ...patch }, { partial: false }));
+    return res.json({ customization });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.post('/api/app-customization/logo', requireXhrHeader, requireAppAdmin, express.raw({ type: ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'], limit: '2mb' }), handleImageUpload('logoUrl'));
+app.post('/api/app-customization/pwa-icon', requireXhrHeader, requireAppAdmin, express.raw({ type: ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'], limit: '2mb' }), handleImageUpload('pwaIconUrl'));
+
+app.post('/api/app-customization/reset', requireXhrHeader, requireAppAdmin, async (_req, res, next) => {
+  try {
+    await writeCustomization(defaultCustomization);
+    return res.json({ customization: { ...defaultCustomization } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get('/manifest.webmanifest', async (_req, res, next) => {
+  try {
+    const customization = await readCustomization();
+    res.type('application/manifest+json').json({
+      name: customization.appName,
+      short_name: customization.shortName,
+      description: customization.description,
+      start_url: '/',
+      scope: '/',
+      display: 'standalone',
+      orientation: 'portrait',
+      background_color: '#020617',
+      theme_color: customization.primaryColor,
+      icons: [
+        { src: customization.pwaIconUrl, sizes: '192x192', type: imageTypeFromUrl(customization.pwaIconUrl), purpose: 'any maskable' },
+        { src: customization.pwaIconUrl, sizes: '512x512', type: imageTypeFromUrl(customization.pwaIconUrl), purpose: 'any maskable' }
+      ]
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'backend' });
 });
@@ -495,6 +723,8 @@ initUsers()
     app.listen(port, () => {
       console.log(`TESTapp2 backend listening on ${port}`);
       console.log(`[auth] Persistance utilisateurs: ${dataPath}`);
+      console.log(`[customization] Configuration: ${customizationPath}`);
+      console.log(`[customization] Uploads: ${uploadsPath}`);
     });
   })
   .catch((error) => {
